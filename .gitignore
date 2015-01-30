@@ -1,0 +1,5 @@
+*.o
+*.dep
+*.autosave
+*~
+Make/linux64GccDPOpt/

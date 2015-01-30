@@ -1,0 +1,5 @@
+/home/rudolf/OpenFOAM/rudolf-2.3.x/src/aggBreakupFoam
+/home/rudolf/OpenFOAM/OpenFOAM-2.3.x/src/finiteVolume/lnInclude/
+/home/rudolf/OpenFOAM/OpenFOAM-2.3.x/src/OpenFOAM/lnInclude/
+/home/rudolf/OpenFOAM/OpenFOAM-2.3.x/src/ODE/lnInclude/
+aggBreakup
