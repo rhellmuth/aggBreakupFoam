@@ -105,13 +105,8 @@ int main(int argc, char *argv[])
             U.correctBoundaryConditions();
         }
 
-//        aggBreakupSystem.solveTransport();
-//        aggBreakupSystem.solveAggBreakup();
-
-
-//Info << "main\nC1 = "<< solution.solute(0).C()[30] << nl
-//    << "Ct2 = " << solution.solute(1).C().timeIndex() << nl
-//    << "St3 = " << solution.solute(2).S().timeIndex() <<endl;
+        aggBreakupSystem.solveTransport();
+        aggBreakupSystem.solveAggBreakup();
 
         // ---  Write run time
 

@@ -3,3 +3,4 @@
 /home/rudolf/OpenFOAM/OpenFOAM-2.3.x/src/OpenFOAM/lnInclude/
 /home/rudolf/OpenFOAM/OpenFOAM-2.3.x/src/ODE/lnInclude/
 aggBreakup
+aggBrePostprocess

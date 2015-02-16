@@ -60,6 +60,20 @@
         mesh
     );
 
+//    Info<< "Reading field D\n" << endl;
+//    volScalarField D
+//    (
+//        IOobject
+//        (
+//            "D",
+//            runTime.timeName(),
+//            mesh,
+//            IOobject::READ_IF_PRESENT,
+//            IOobject::AUTO_WRITE
+//        ),
+//        mesh
+//    );
+
 
 #   include "createPhi.H"
 

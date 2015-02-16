@@ -38,9 +38,12 @@ SourceFiles
 
 #include "volFields.H"
 #include "PtrList.H"
+#include "fvCFD.H"
 #include "hashedWordList.H"
 #include "ODESystem.H"
 #include "ODESolver.H"
+
+#include "../aggBrePostprocess/aggBrePostprocess.H"
 
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 
@@ -78,7 +81,7 @@ class aggBreakup
         PtrList<volScalarField> CMD_;
 
         //-Strain rate field
-        tmp<volTensorField> strainRate_;
+        autoPtr<volTensorField> strainRate_;
 
         // CMD discretization scheme data
 
@@ -116,7 +119,7 @@ class aggBreakup
             //-Array of terms obtained from interpolation function of
             // Kumar & Ramkrishna (1997), which also presented by
             // Garrick, Lehtinen & Zachariah (2006)
-            scalar*** chi;
+            scalar*** chi_;
 
             // Aggregation
 
@@ -133,7 +136,9 @@ class aggBreakup
                 dimensionedScalar T_;
 
                 //-Base aggregation kernel (shear excluded)
-                scalar** aggKernel;
+                autoPtr<scalarSquareMatrix> brownianAggKernel_;
+                autoPtr<scalarSquareMatrix> shearAggKernel_;
+                autoPtr<scalarSquareMatrix> aggKernel_;
 
             // Breakup data
 
@@ -144,8 +149,19 @@ class aggBreakup
                 scalar b_;
                 scalar c_;
 
-                //-Base breakup kernell (shear excluded)
-                scalar* breKernel;
+                //-Base breakup kernel (just the Radii part, shear part
+                // excluded)
+                autoPtr<scalarField> Rc_;
+
+                //-Breakup kernel
+                autoPtr<scalarField> breKernel_;
+
+                //-Fragment mass distribution
+                autoPtr<scalarSquareMatrix> fragMassDistr_;
+
+        // ODE solver
+        autoPtr<ODESolver> solver_;
+
 
 
     // Private Member Functions
@@ -159,10 +175,10 @@ class aggBreakup
         // ODE parameters
 
             //- Return number of equations
-            virtual label nEqns() const
-            {
-                return nBins_;
-            }
+            virtual label nEqns() const;
+//            {
+//                return label(nBins_);
+//            }
 
             //- Return derivatives
             virtual void derivatives
@@ -181,8 +197,19 @@ class aggBreakup
                 scalarSquareMatrix& dfdy
             ) const;
 
+        scalarField smoluchowski(const scalarField& y);
+
+        void updateAggKernel(const label& celli);
+        void updateBreKernel(const label& celli);
+
 
 public:
+
+    ClassName("aggBreakup");
+
+    // Public data
+    autoPtr<aggBrePostprocess> postProc;
+
 
     // Constructors
 
@@ -224,6 +251,8 @@ public:
         // Edit
 
             void solveAggBreakup();
+
+            void solveTransport();
 
         // Write
 

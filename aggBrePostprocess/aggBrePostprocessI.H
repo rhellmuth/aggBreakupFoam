@@ -26,11 +26,6 @@ License
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 
 // * * * * * * * * * * * * * Private Member Functions  * * * * * * * * * * * //
-//inline const Foam::label Foam::aggBreakup::nEqns()
-//{
-//    return label(nBin_);
-//}
-
 
 
 // * * * * * * * * * * * * * * * * Constructors  * * * * * * * * * * * * * * //

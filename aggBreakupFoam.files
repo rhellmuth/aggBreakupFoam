@@ -6,3 +6,6 @@ createFields.H
 aggBreakup/aggBreakup.C
 aggBreakup/aggBreakup.H
 aggBreakup/aggBreakupI.H
+aggBrePostprocess/aggBrePostprocess.C
+aggBrePostprocess/aggBrePostprocess.H
+aggBrePostprocess/aggBrePostprocessI.H
