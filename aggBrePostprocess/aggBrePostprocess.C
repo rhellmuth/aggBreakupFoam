@@ -65,7 +65,9 @@ Foam::aggBrePostprocess::aggBrePostprocess
   isSecondMomentOn_(false),
   isVmeanOn_(false),
   isRmeanOn_(false),
-  isAggFractionOn_(false)
+  isAggFractionOn_(false),
+  isCellFlowCharTimeOn_(false),
+  isAggAdvRatioOn_(false)
 {
 
     // Post processing switches
@@ -86,6 +88,14 @@ Foam::aggBrePostprocess::aggBrePostprocess
     isVmeanOn_ = postProcDict.lookupOrDefault("isVmeanOn", false);
     isRmeanOn_ = postProcDict.lookupOrDefault("isRmeanOn", false);
     isAggFractionOn_ = postProcDict.lookupOrDefault("isAggFractionOn", false);
+    isCellFlowCharTimeOn_ = postProcDict.lookupOrDefault
+                            (
+                                "isCellFlowCharTimeOn", false
+                            );
+    isAggAdvRatioOn_ = postProcDict.lookupOrDefault
+                            (
+                                "isAggAdvRatioOn", false
+                            );
 
     if(debug)
     {
@@ -179,6 +189,8 @@ Foam::aggBrePostprocess::aggBrePostprocess
         vMean_->write();
     }
 
+
+
     if(isRmeanOn_)
     {
         rMean_.set
@@ -269,7 +281,8 @@ Foam::aggBrePostprocess::aggBrePostprocess
                         t_a()
                     )
                 );
-                Info << "Writing field t_a" << endl;
+
+                Info << "Writing field t_a" << nl << endl;
                 ta_->write();
             }
 
@@ -339,6 +352,52 @@ Foam::aggBrePostprocess::aggBrePostprocess
 
     }
 
+    if(isCellFlowCharTimeOn_)
+    {
+        tf_.set
+        (
+            new volScalarField
+            (
+                IOobject
+                (
+                    "t_f",
+                    runTime_.timeName(),
+                    mesh_,
+                    IOobject::NO_READ,
+                    IOobject::AUTO_WRITE
+                ),
+                t_f()
+            )
+        );
+
+        Info << "Writing field t_f (advection characteristic time)"
+             << nl << endl;
+        tf_->write();
+    }
+
+    if(isAggAdvRatioOn_)
+    {
+        Da_.set
+        (
+            new volScalarField
+            (
+                IOobject
+                (
+                    "Da",
+                    runTime_.timeName(),
+                    mesh_,
+                    IOobject::NO_READ,
+                    IOobject::AUTO_WRITE
+                ),
+                Da()
+            )
+        );
+
+        Info << "Writing field Da"
+             << nl << endl;
+        Da_->write();
+    }
+
 
 }
 
@@ -368,12 +427,12 @@ Foam::tmp<volScalarField> Foam::aggBrePostprocess::zerothMoment() const
         (
             IOobject
             (
-                "M_0",
+                "summation",
                 runTime_.timeName(),
                 mesh_
             ),
             mesh_,
-            dimensionedScalar("M_0", dimMoles/dimVolume, 0.0)
+            dimensionedScalar("summation", dimMoles/dimVolume, 0.0)
         )
     );
 
@@ -392,12 +451,12 @@ Foam::tmp<volScalarField> Foam::aggBrePostprocess::firstMoment() const
         (
             IOobject
             (
-                "M_1",
+                "summation",
                 runTime_.timeName(),
                 mesh_
             ),
             mesh_,
-            dimensionedScalar("M_1", dimMoles/dimVolume, 0.0)
+            dimensionedScalar("summation", dimMoles/dimVolume, 0.0)
         )
     );
 
@@ -417,12 +476,12 @@ Foam::tmp<volScalarField> Foam::aggBrePostprocess::secondMoment() const
         (
             IOobject
             (
-                "M_2",
+                "summation",
                 runTime_.timeName(),
                 mesh_
             ),
             mesh_,
-            dimensionedScalar("M_2", dimMoles/dimVolume, 0.0)
+            dimensionedScalar("summation", dimMoles/dimVolume, 0.0)
         )
     );
 
@@ -430,6 +489,7 @@ Foam::tmp<volScalarField> Foam::aggBrePostprocess::secondMoment() const
     {
         M_2() += CMD_[i] * pow(vList_[i], 2.0);
     }
+
     return M_2;
 }
 
@@ -481,6 +541,7 @@ Foam::tmp<volScalarField> Foam::aggBrePostprocess::t_a() const
                   + dimensionedScalar("VSMALL", dimless/dimTime, VSMALL));
 }
 
+
 Foam::tmp<volScalarField> Foam::aggBrePostprocess::t_b() const
 {
     scalar b(readScalar(aggBreakupDict_.lookup("b")));
@@ -503,9 +564,48 @@ Foam::tmp<volScalarField> Foam::aggBrePostprocess::t_b() const
     return 1.0 / (pow( G_()/Gstar + VSMALL, b) + VSMALL);
 }
 
+
 Foam::tmp<volScalarField> Foam::aggBrePostprocess::theta() const
 {
     return t_a() / (t_b() + VSMALL);
+}
+
+
+Foam::tmp<volScalarField> Foam::aggBrePostprocess::t_f() const
+{
+    tmp<volScalarField> charTime
+    (
+        new volScalarField
+        (
+            IOobject
+            (
+                "charTime",
+                runTime_.timeName(),
+                mesh_
+            ),
+            mesh_,
+            dimensionedScalar("charTime", dimTime, 0.0),
+            zeroGradientFvPatchScalarField::typeName
+        )
+    );
+
+    const surfaceScalarField& phi =
+        mesh_.lookupObject<surfaceScalarField>("phi");
+
+    charTime->internalField() =
+              2.0 * mesh_.V().field()
+            / fvc::surfaceSum(mag(phi))().internalField();
+
+    charTime->correctBoundaryConditions();
+
+    return charTime;
+}
+
+
+Foam::tmp<volScalarField> Foam::aggBrePostprocess::Da() const
+{
+
+    return t_f()/t_a();
 }
 
 
@@ -513,17 +613,17 @@ void Foam::aggBrePostprocess::update()
 {
     if(zerothMoment_.valid())
     {
-        zerothMoment_() = zerothMoment();
+        zerothMoment_() = M_0();
     }
 
     if(firstMoment_.valid())
     {
-        firstMoment_() = firstMoment();
+        firstMoment_() = M_1();
     }
 
     if(secondMoment_.valid())
     {
-        secondMoment_() = secondMoment();
+        secondMoment_() = M_2();
     }
 
     if(vMean_.valid())
@@ -544,7 +644,7 @@ void Foam::aggBrePostprocess::update()
         (
             C_0.db().lookupObject<volTensorField>(word("E"))
         );
-        G_() = mag(E) / sqrt(2.0);
+        G_() = mag(E) / sqrt(2.0); // I think this is wrong. Rather check eigenvalues
 
         if(ta_.valid())
         {
@@ -560,7 +660,19 @@ void Foam::aggBrePostprocess::update()
         {
             theta_() = theta();
         }
+
+        if(tf_.valid())
+        {
+            tf_() = t_f();
+        }
+
+        if(Da_.valid())
+        {
+            Da_() = Da();
+        }
     }
+
+
 
 }
 
