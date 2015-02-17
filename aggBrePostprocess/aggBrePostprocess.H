@@ -86,6 +86,8 @@ class aggBrePostprocess
         bool isVmeanOn_;
         bool isRmeanOn_;
         bool isAggFractionOn_;
+        bool isCellFlowCharTimeOn_;
+        bool isAggAdvRatioOn_;
 
         //-Strain rate
         autoPtr<volScalarField> G_;
@@ -122,6 +124,13 @@ class aggBrePostprocess
 
         //-Aggregation fraction in %
         autoPtr<volScalarField> PA_;
+
+        //-Convection characteristic time
+        autoPtr<volScalarField> tf_;
+
+        //-Damköhler number for aggregation rate / advection rate
+        autoPtr<volScalarField> Da_;
+
 
     // Private Member Functions
 
@@ -164,15 +173,19 @@ public:
         // Check
 
         // Edit
-        tmp<volScalarField> zerothMoment() const;
-        tmp<volScalarField> firstMoment() const;
-        tmp<volScalarField> secondMoment() const;
+        tmp<volScalarField> M_0() const;
+        tmp<volScalarField> M_1() const;
+        tmp<volScalarField> M_2() const;
         tmp<volScalarField> vMean() const;
         tmp<volScalarField> rMean() const;
         tmp<volScalarField> t_a() const;
         tmp<volScalarField> t_b() const;
         tmp<volScalarField> theta() const;
         tmp<volScalarField> PA() const;
+        tmp<volScalarField> t_f() const;
+        tmp<volScalarField> Da() const;
+//        tmp<volScalarField> t_d() const;
+//        tmp<volScalarField> Pe() const;
 
         void update();
 
