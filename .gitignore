@@ -3,3 +3,4 @@
 *.autosave
 *~
 Make/linux64GccDPOpt/
+Make/linuxGccDPOpt/

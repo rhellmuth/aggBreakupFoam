@@ -55,8 +55,85 @@ void Foam::aggBreakup::derivatives
     scalarField destruction(nBins_, 0.0);
 
     // aggregation PBE by Smoluchowski (1917)
-    creation = 0.0;
-    destruction = 0.0;
+    if(isBrowninanAggOn_ || isShearAggOn_)
+    {
+        creation = 0.0;
+        destruction = 0.0;
+
+        if(isGridUniform_)
+        {
+            for(int i = 0; i < nBins_; ++i)
+            {
+                for(int j = 0; j < i; ++j)
+                {
+                    creation[i] += 0.5 * aggKernel_()[i-j-1][j] * y[i-j-1] * y[j];
+                }
+                for(int j = 0; j < nBins_; ++j)
+                {
+                    destruction[i] += aggKernel_()[i][j] * y[i] * y[j];
+                }
+            }
+        }
+        else
+        {
+            for(int i = 0; i < nBins_; ++i)
+            {
+                for(int j = 0; j < nBins_; ++j)
+                {
+                    for(int k = 0; k < nBins_; ++k)
+                    {
+                        creation[i] += 0.5 * chi_[j][k][i] * aggKernel_()[j][k] *
+                                y[j] * y[k];
+                    }
+                }
+                for(int j = 0; j < nBins_; ++j)
+                {
+                    destruction[i] += aggKernel_()[i][j] * y[i] * y[j];
+                }
+            }
+        }
+
+        aggregation = eta_ * ( creation - destruction);
+    }
+
+    // breakup PBE by Pandya & Spielman (1982)
+    if(isBreakupOn_)
+    {
+        creation = 0.0;
+        destruction = 0.0;
+
+        for(int i = 0; i < nBins_; ++i)
+        {
+            for(int j = i + 1; j < nBins_; ++j)
+            {
+                creation[i] += fragMassDistr_()[i][j] * breKernel_()[j] * y[j];
+            }
+
+            destruction[i] = breKernel_()[i] * y[i];
+        }
+
+        breakup = creation - destruction;
+    }
+
+    dydx = aggregation + breakup;
+}
+
+
+void Foam::aggBreakup::jacobian
+(
+    const scalar x,
+    const scalarField& y,
+    scalarField& dfdx,
+    scalarSquareMatrix& dfdy
+) const
+{
+    notImplemented("Oscilator::jacobian(...) const");
+}
+
+scalarField Foam::aggBreakup::smoluchowski(const scalarField& y)
+{
+    scalarField creation(nBins_, 0.0);
+    scalarField destruction(nBins_, 0.0);
 
     if(isGridUniform_)
     {
@@ -91,46 +168,8 @@ void Foam::aggBreakup::derivatives
         }
     }
 
-    aggregation = eta_ * ( creation - destruction);
+    return eta_ * ( creation - destruction);
 
-    // breakup PBE by Pandya & Spielman (1982)
-    creation = 0.0;
-    destruction = 0.0;
-
-    for(int i = 0; i < nBins_; ++i)
-    {
-        for(int j = i + 1; j < nBins_; ++j)
-        {
-               creation[i] += fragMassDistr_()[i][j] * breKernel_()[j] * y[j];
-        }
-        destruction[i] = breKernel_()[i] * y[i];
-    }
-
-    breakup = creation - destruction;
-
-    dydx = aggregation + breakup;
-}
-
-
-void Foam::aggBreakup::jacobian
-(
-    const scalar x,
-    const scalarField& y,
-    scalarField& dfdx,
-    scalarSquareMatrix& dfdy
-) const
-{
-    notImplemented("Oscilator::jacobian(...) const");
-}
-
-scalarField Foam::aggBreakup::smoluchowski(const scalarField& y)
-{
-    scalarField dydt(nBins_, 0.0);
-    scalarField creation(nBins_, 0.0);
-    scalarField destruction(nBins_, 0.0);
-
-
-    return dydt;
 }
 
 void Foam::aggBreakup::updateAggKernel(const label& celli)
@@ -194,10 +233,13 @@ void Foam::aggBreakup::updateBreKernel(const label& celli)
         breKernel_()[i] =  0.0;
     }
 
-    for(int i = 0; i < nBins_; ++i)
+    if(isBreakupOn_)
     {
-        scalar G(mag(strainRate_()[celli]));
-        breKernel_()[i] = pow(G / Gstar_.value(), b_) * Rc_()[i];
+        for(int i = 1; i < nBins_; ++i) // begins at i=0 because monomer does not break
+        {
+            scalar G(mag(strainRate_()[celli]));
+            breKernel_()[i] = pow(G / Gstar_.value(), b_) * Rc_()[i];
+        }
     }
 }
 
@@ -711,7 +753,7 @@ void Foam::aggBreakup::setPBE()
                 for(int j = 0; j < nBins_; j++)
                 {
                     ofFragMassDistr << fragMassDistr_()[i][j]
-                                       << tab;
+                                    << tab;
                 }
                 ofFragMassDistr << nl;
             }

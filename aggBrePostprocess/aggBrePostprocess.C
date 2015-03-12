@@ -117,7 +117,7 @@ Foam::aggBrePostprocess::aggBrePostprocess
                     IOobject::NO_READ,
                     IOobject::AUTO_WRITE
                 ),
-                zerothMoment()
+                M_0()
             )
         );
 
@@ -138,7 +138,7 @@ Foam::aggBrePostprocess::aggBrePostprocess
                     IOobject::NO_READ,
                     IOobject::AUTO_WRITE
                 ),
-                firstMoment()
+                M_1()
             )
         );
 
@@ -159,7 +159,7 @@ Foam::aggBrePostprocess::aggBrePostprocess
                     IOobject::NO_READ,
                     IOobject::AUTO_WRITE
                 ),
-                secondMoment()
+                M_2()
             )
         );
 
@@ -419,9 +419,9 @@ Foam::aggBrePostprocess::~aggBrePostprocess()
 
 // * * * * * * * * * * * * * * Member Functions  * * * * * * * * * * * * * * //
 
-Foam::tmp<volScalarField> Foam::aggBrePostprocess::zerothMoment() const
+Foam::tmp<volScalarField> Foam::aggBrePostprocess::M_0() const
 {
-    tmp<volScalarField> M_0
+    tmp<volScalarField> output
     (
         new volScalarField
         (
@@ -438,14 +438,14 @@ Foam::tmp<volScalarField> Foam::aggBrePostprocess::zerothMoment() const
 
     forAll(CMD_, i)
     {
-        M_0() += CMD_[i];
+        output() += CMD_[i];
     }
-    return M_0;
+    return output;
 }
 
-Foam::tmp<volScalarField> Foam::aggBrePostprocess::firstMoment() const
+Foam::tmp<volScalarField> Foam::aggBrePostprocess::M_1() const
 {
-    tmp<volScalarField> M_1
+    tmp<volScalarField> output
     (
         new volScalarField
         (
@@ -462,15 +462,15 @@ Foam::tmp<volScalarField> Foam::aggBrePostprocess::firstMoment() const
 
     forAll(CMD_, i)
     {
-        M_1() += CMD_[i] * vList_[i];
+        output() += CMD_[i] * vList_[i];
     }
-    return M_1;
+    return output;
 }
 
 
-Foam::tmp<volScalarField> Foam::aggBrePostprocess::secondMoment() const
+Foam::tmp<volScalarField> Foam::aggBrePostprocess::M_2() const
 {
-    tmp<volScalarField> M_2
+    tmp<volScalarField> output
     (
         new volScalarField
         (
@@ -487,15 +487,15 @@ Foam::tmp<volScalarField> Foam::aggBrePostprocess::secondMoment() const
 
     forAll(CMD_, i)
     {
-        M_2() += CMD_[i] * pow(vList_[i], 2.0);
+        output() += CMD_[i] * pow(vList_[i], 2.0);
     }
 
-    return M_2;
+    return output;
 }
 
 Foam::tmp<volScalarField> Foam::aggBrePostprocess::vMean() const
 {
-    return firstMoment() / zerothMoment();
+    return M_1() / M_0();
 }
 
 Foam::tmp<volScalarField> Foam::aggBrePostprocess::rMean() const
@@ -520,13 +520,13 @@ Foam::tmp<volScalarField> Foam::aggBrePostprocess::rMean() const
         RiCi() += CMD_[i] * rList_[i];
     }
 
-    return RiCi() / zerothMoment();
+    return RiCi() / M_0();
 }
 
 
 Foam::tmp<volScalarField> Foam::aggBrePostprocess::PA() const
 {
-    return 100.0 * (1.0 - CMD_[0] / (firstMoment() +
+    return 100.0 * (1.0 - CMD_[0] / (M_1() +
                 dimensionedScalar("VSMALL", dimMoles / dimVolume, VSMALL)));
 }
 
@@ -537,7 +537,7 @@ Foam::tmp<volScalarField> Foam::aggBrePostprocess::t_a() const
     dimensionedScalar alpha("alpha", dimless/dimMoles, 4./3.);
     const dimensionedScalar& R_mono(rList_[0]);
 
-    return 1.0 / (eta * alpha * G_() * pow(R_mono, 3.) * firstMoment()
+    return 1.0 / (eta * alpha * G_() * pow(R_mono, 3.) * M_1()
                   + dimensionedScalar("VSMALL", dimless/dimTime, VSMALL));
 }
 
@@ -594,7 +594,7 @@ Foam::tmp<volScalarField> Foam::aggBrePostprocess::t_f() const
 
     charTime->internalField() =
               2.0 * mesh_.V().field()
-            / fvc::surfaceSum(mag(phi))().internalField();
+            / (fvc::surfaceSum(mag(phi))().internalField() + VSMALL);
 
     charTime->correctBoundaryConditions();
 
