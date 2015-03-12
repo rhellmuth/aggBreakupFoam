@@ -173,6 +173,7 @@ public:
         // Check
 
         // Edit
+        tmp<volScalarField> G() const;
         tmp<volScalarField> M_0() const;
         tmp<volScalarField> M_1() const;
         tmp<volScalarField> M_2() const;

@@ -242,10 +242,6 @@ Foam::aggBrePostprocess::aggBrePostprocess
         // Check whether strain rate tensor is not on objectRegistry
         if(C_0.db().foundObject<volTensorField>(word("E")))
         {
-            const volTensorField& E
-            (
-                C_0.db().lookupObject<volTensorField>(word("E"))
-            );
             G_.set
             (
                 new volScalarField
@@ -258,7 +254,7 @@ Foam::aggBrePostprocess::aggBrePostprocess
                         IOobject::NO_READ,
                         IOobject::AUTO_WRITE
                     ),
-                    mag(E)/ sqrt(2.0)
+                    G()
                 )
             );
 
@@ -418,6 +414,19 @@ Foam::aggBrePostprocess::~aggBrePostprocess()
 
 
 // * * * * * * * * * * * * * * Member Functions  * * * * * * * * * * * * * * //
+
+Foam::tmp<volScalarField> Foam::aggBrePostprocess::G() const
+{
+    // update shear rate
+    const volScalarField& C_0(CMD_[0]);
+    const volTensorField& E
+    (
+        C_0.db().lookupObject<volTensorField>(word("E"))
+    );
+
+    return 2.0 / sqrt(2.0) * mag(E); // I think this is wrong. Rather check eigenvalues
+}
+
 
 Foam::tmp<volScalarField> Foam::aggBrePostprocess::M_0() const
 {
@@ -638,13 +647,8 @@ void Foam::aggBrePostprocess::update()
 
     if(G_.valid())
     {
-        // update shear rate
-        const volScalarField& C_0(CMD_[0]);
-        const volTensorField& E
-        (
-            C_0.db().lookupObject<volTensorField>(word("E"))
-        );
-        G_() = mag(E) / sqrt(2.0); // I think this is wrong. Rather check eigenvalues
+
+        G_() = G();
 
         if(ta_.valid())
         {

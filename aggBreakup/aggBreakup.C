@@ -185,7 +185,7 @@ void Foam::aggBreakup::updateAggKernel(const label& celli)
 
     if(isShearAggOn_)
     {
-       scalar G(mag(strainRate_()[celli]));
+       scalar G(2.0 * mag(strainRate_()[celli]));
 
        scalar alpha(4./3.);
        // NOTE: implement general alpha later
@@ -237,7 +237,7 @@ void Foam::aggBreakup::updateBreKernel(const label& celli)
     {
         for(int i = 1; i < nBins_; ++i) // begins at i=0 because monomer does not break
         {
-            scalar G(mag(strainRate_()[celli]));
+            scalar G(2.0 * mag(strainRate_()[celli]));
             breKernel_()[i] = pow(G / Gstar_.value(), b_) * Rc_()[i];
         }
     }
@@ -644,20 +644,24 @@ void Foam::aggBreakup::setPBE()
             Info << "Writing field E" << nl << endl;
             strainRate_->write();
 
-            volSymmTensorField symmU
+            symmGradU_.set
             (
-                IOobject
+                new volSymmTensorField
                 (
-                    "symmGradU",
-                    runTime_.timeName(),
-                    mesh_,
-                    IOobject::NO_READ,
-                    IOobject::AUTO_WRITE
-                ),
-                symm(gradU)
+                    IOobject
+                    (
+                        "symmGradU",
+                        runTime_.timeName(),
+                        mesh_,
+                        IOobject::NO_READ,
+                        IOobject::AUTO_WRITE
+                    ),
+                    symm(gradU)
+                )
             );
 
-            symmU.write();
+            Info << "Writing field symmGradU" << nl << endl;
+            symmGradU_->write();
         }
     }
     else
@@ -840,6 +844,8 @@ void Foam::aggBreakup::solveTransport()
         // update strainRate field
         volTensorField gradU = fvc::grad(U_);
         strainRate_() = 0.5*(gradU + gradU.T());
+
+        symmGradU_() = symm(gradU);
 
         // NOTICE:
         // strainRate_() = symm(gradU); could also be used.

@@ -83,6 +83,8 @@ class aggBreakup
         //-Strain rate field
         autoPtr<volTensorField> strainRate_;
 
+        autoPtr<volSymmTensorField> symmGradU_;
+
         // CMD discretization scheme data
 
             autoPtr<IOdictionary> aggBreakupDict_;
