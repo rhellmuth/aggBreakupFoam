@@ -159,6 +159,13 @@ class aggBreakup
                 //-Fragment mass distribution
                 autoPtr<scalarSquareMatrix> fragMassDistr_;
 
+            // Activation rule
+
+                bool isActivationOn_;
+                scalar activThreshould_;
+                scalar activRate_;
+                autoPtr<volScalarField> Cr_;
+
         // ODE solver
         autoPtr<ODESolver> solver_;
 

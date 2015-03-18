@@ -359,6 +359,10 @@ void Foam::aggBreakup::readDict(string dictName)
     b_ = readScalar(aggBreakupDict_->lookup("b"));
     c_ = readScalar(aggBreakupDict_->lookup("c"));
 
+    isActivationOn_ = readBool(aggBreakupDict_->lookup("isActivationOn"));
+    activThreshould_ = readScalar(aggBreakupDict_->lookup("activThreshould"));
+    activRate_ = readScalar(aggBreakupDict_->lookup("activRate"));
+
     // Create the selected ODE system solver
     solver_ =  ODESolver::New(
                                 *this,
@@ -486,7 +490,24 @@ void Foam::aggBreakup::setCMD()
         }
     }
 
-
+    if(isActivationOn_)
+    {
+        Cr_.set
+        (
+            new volScalarField
+            (
+                IOobject
+                (
+                    "C_R",
+                    runTime_.timeName(),
+                    mesh_,
+                    IOobject::MUST_READ,
+                    IOobject::AUTO_WRITE
+                ),
+                mesh_
+            )
+        );
+    }
 }
 
 void Foam::aggBreakup::setPBE()
@@ -782,7 +803,7 @@ void Foam::aggBreakup::solveAggBreakup()
          << endl;
 
     forAll(mesh_.C(), celli)
-    {
+    {        
         scalarField y(nBins_, 0.0);
 
         // set values to vector y
