@@ -343,6 +343,8 @@ void Foam::aggBreakup::readDict(string dictName)
         )
     );
 
+    isPBEcoupled_ = readBool(aggBreakupDict_->lookup("isPBEcoupled"));
+
     isGridUniform_ = readBool(aggBreakupDict_->lookup("isGridUniform"));
     nBins_ = readLabel( aggBreakupDict_->lookup("nBins") );
     Rmono_ = aggBreakupDict_->lookup("Rmono");
@@ -773,6 +775,18 @@ void Foam::aggBreakup::setPBE()
 
 }
 
+void Foam::aggBreakup::update()
+{
+    if(isPBEcoupled_)
+    {
+        Info << "puff" << endl;
+    }
+    else
+    {
+        solveTransport();
+        solveAggBreakup();
+    }
+}
 
 void Foam::aggBreakup::solveAggBreakup()
 {

@@ -620,64 +620,64 @@ Foam::tmp<volScalarField> Foam::aggBrePostprocess::Da() const
 
 void Foam::aggBrePostprocess::update()
 {
-    if(zerothMoment_.valid())
+    if(runTime_.outputTime()) //calculate only at outputTime
     {
-        zerothMoment_() = M_0();
-    }
-
-    if(firstMoment_.valid())
-    {
-        firstMoment_() = M_1();
-    }
-
-    if(secondMoment_.valid())
-    {
-        secondMoment_() = M_2();
-    }
-
-    if(vMean_.valid())
-    {
-        vMean_() = vMean();
-    }
-
-    if(rMean_.valid())
-    {
-        rMean_() = rMean();
-    }
-
-    if(G_.valid())
-    {
-
-        G_() = G();
-
-        if(ta_.valid())
+        if(zerothMoment_.valid())
         {
-            ta_() = t_a();
+            zerothMoment_() = M_0();
         }
 
-        if(tb_.valid())
+        if(firstMoment_.valid())
         {
-            tb_() = t_b();
+            firstMoment_() = M_1();
         }
 
-        if(theta_.valid())
+        if(secondMoment_.valid())
         {
-            theta_() = theta();
+            secondMoment_() = M_2();
         }
 
-        if(tf_.valid())
+        if(vMean_.valid())
         {
-            tf_() = t_f();
+            vMean_() = vMean();
         }
 
-        if(Da_.valid())
+        if(rMean_.valid())
         {
-            Da_() = Da();
+            rMean_() = rMean();
+        }
+
+        if(G_.valid())
+        {
+
+            G_() = G();
+
+            if(ta_.valid())
+            {
+                ta_() = t_a();
+            }
+
+            if(tb_.valid())
+            {
+                tb_() = t_b();
+            }
+
+            if(theta_.valid())
+            {
+                theta_() = theta();
+            }
+
+            if(tf_.valid())
+            {
+                tf_() = t_f();
+            }
+
+            if(Da_.valid())
+            {
+                Da_() = Da();
+            }
         }
     }
-
-
-
 }
 
 // * * * * * * * * * * * * * * Member Operators  * * * * * * * * * * * * * * //

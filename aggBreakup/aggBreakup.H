@@ -87,6 +87,8 @@ class aggBreakup
 
         // CMD discretization scheme data
 
+            bool isPBEcoupled_;
+
             autoPtr<IOdictionary> aggBreakupDict_;
 
             //-Specify the bin structure you want to use
@@ -251,6 +253,8 @@ public:
         // Check
 
         // Edit
+
+            void update();
 
             void solveAggBreakup();
 
