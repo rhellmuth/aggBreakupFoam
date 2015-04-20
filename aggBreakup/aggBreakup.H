@@ -80,10 +80,13 @@ class aggBreakup
         //-Colloid cluster fields
         PtrList<volScalarField> CMD_;
 
-        //-Strain rate field
-        autoPtr<volTensorField> strainRate_;
+        PtrList<volScalarField> CMDold_;
 
-        autoPtr<volSymmTensorField> symmGradU_;
+        //-Strain rate field
+        autoPtr<volSymmTensorField> strainRate_;
+
+        //-Maximum shear rate field
+        autoPtr<volScalarField>     maxShearRate_;
 
         // CMD discretization scheme data
 

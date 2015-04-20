@@ -185,18 +185,18 @@ void Foam::aggBreakup::updateAggKernel(const label& celli)
 
     if(isShearAggOn_)
     {
-       scalar G(2.0 * mag(strainRate_()[celli]));
+        scalar G(maxShearRate_()[celli]);
 
-       scalar alpha(4./3.);
-       // NOTE: implement general alpha later
+        scalar alpha(4./3.);
+        // NOTE: implement general alpha later
 
-       for(int i = 0; i < nBins_; ++i)
-       {
+        for(int i = 0; i < nBins_; ++i)
+        {
            for(int j = 0; j < nBins_; ++j)
            {
                aggKernel_()[i][j] += alpha * G * shearAggKernel_()[i][j];
            }
-       }
+        }
     }
     if(isBrowninanAggOn_)
     {
@@ -237,7 +237,8 @@ void Foam::aggBreakup::updateBreKernel(const label& celli)
     {
         for(int i = 1; i < nBins_; ++i) // begins at i=0 because monomer does not break
         {
-            scalar G(2.0 * mag(strainRate_()[celli]));
+            scalar G(maxShearRate_()[celli]);
+
             breKernel_()[i] = pow(G / Gstar_.value(), b_) * Rc_()[i];
         }
     }
@@ -376,6 +377,10 @@ void Foam::aggBreakup::setCMD()
     vList_.setSize(nBins_);
     Rlist_.setSize(nBins_);
     CMD_.setSize(nBins_);
+    if(isPBEcoupled_)
+    {
+        CMDold_.setSize(nBins_);
+    }
 
     forAll(vList_, i)
     {
@@ -485,6 +490,26 @@ void Foam::aggBreakup::setCMD()
 
             Info << "Writing field C_" + name + " = Cdefault" << nl << endl;
             CMD_[i].write();
+        }
+
+        if(isPBEcoupled_)
+        {
+            CMDold_.set
+            (
+                i,
+                new volScalarField
+                (
+                    IOobject
+                    (
+                        "Cold_" + name,
+                        runTime_.timeName(),
+                        mesh_,
+                        IOobject::NO_READ,
+                        IOobject::NO_WRITE
+                    ),
+                    CMD_[i]
+                )
+            );
         }
     }
 
@@ -625,11 +650,12 @@ void Foam::aggBreakup::setPBE()
                 }
             }
 
-            volTensorField gradU = fvc::grad(U_);
+            // For some reason, the eigenvalues cannot be calculated from fvc::grad(U_) at the first
+            // time step if all Exx = Eyy = Ezz. (SMALL > VSMALL)
 
             strainRate_.set
             (
-                new volTensorField
+                new volSymmTensorField
                 (
                     IOobject
                     (
@@ -639,31 +665,37 @@ void Foam::aggBreakup::setPBE()
                         IOobject::NO_READ,
                         IOobject::AUTO_WRITE
                     ),
-                    0.5 * (gradU + gradU.T())
+                    symm(fvc::grad(U_)())
+                    + dimensionedSymmTensor
+                    (
+                        "VSMALL",
+                        dimless / dimTime,
+                        symmTensor(VSMALL, VSMALL, VSMALL, SMALL, VSMALL, VSMALL)
+                    )
                 )
             );
 
             Info << "Writing field E" << nl << endl;
             strainRate_->write();
 
-            symmGradU_.set
+            maxShearRate_.set
             (
-                new volSymmTensorField
+                new volScalarField
                 (
                     IOobject
                     (
-                        "symmGradU",
+                        "G",
                         runTime_.timeName(),
                         mesh_,
                         IOobject::NO_READ,
                         IOobject::AUTO_WRITE
                     ),
-                    symm(gradU)
+                    2.0 * eigenValues( strainRate_() )().component(vector::Z)
                 )
             );
 
-            Info << "Writing field symmGradU" << nl << endl;
-            symmGradU_->write();
+            Info << "Writing field G" << nl << endl;
+            maxShearRate_->write();
         }
     }
     else
@@ -779,13 +811,24 @@ void Foam::aggBreakup::update()
 {
     if(isPBEcoupled_)
     {
-        Info << "puff" << endl;
+        solveTransport();
     }
     else
     {
         solveTransport();
         solveAggBreakup();
     }
+
+    if(isShearAggOn_)
+    {
+        // update strainRate field
+        strainRate_() = symm(fvc::grad(U_)());
+
+        // update maximum shear rate field
+        maxShearRate_() = 2.0 * eigenValues(strainRate_())().component(vector::Z);
+    }
+
+    postProc->update();
 }
 
 void Foam::aggBreakup::solveAggBreakup()
@@ -818,6 +861,7 @@ void Foam::aggBreakup::solveAggBreakup()
         {
             updateBreKernel(celli);
         }
+
         solver_->solve
         (
             runTime_.value(),
@@ -832,8 +876,6 @@ void Foam::aggBreakup::solveAggBreakup()
             CMD_[dofi][celli] = y[dofi];
         }
     }
-
-    postProc->update();
 }
 
 
@@ -843,29 +885,21 @@ void Foam::aggBreakup::solveTransport()
     {
         volScalarField& Ci = CMD_[i];
 
-        tmp<fvScalarMatrix> massTransport
-        (
-            fvm::ddt(Ci)
-          + fvm::div(phi_, Ci, "div(phi,C_*)")
-//          - fvm::laplacian(D, Ci, "laplacian(D,C_*)")
-        );
+        if(isPBEcoupled_)
+        {
+            CMDold_[i] = Ci;
+        }
+        else
+        {
+            tmp<fvScalarMatrix> massTransport
+            (
+                fvm::ddt(Ci)
+              + fvm::div(phi_, Ci, "div(phi,C_*)")
+//              - fvm::laplacian(D, Ci, "laplacian(D,C_*)")
+            );
 
-       massTransport().solve(mesh_.solver("C_*"));
-    }
-
-    if(isShearAggOn_)
-    {
-        // update strainRate field
-        volTensorField gradU = fvc::grad(U_);
-        strainRate_() = 0.5*(gradU + gradU.T());
-
-        symmGradU_() = symm(gradU);
-
-        // NOTICE:
-        // strainRate_() = symm(gradU); could also be used.
-        // the problem is that the symm operator generates a symmTensor instead
-        // of a simple tensor. The symmTensor stores 6 scalars instead of 9 of
-        // tensor. The strainRate field would have to be defined as symmTensor.
+            massTransport().solve(mesh_.solver("C_*"));
+        }
     }
 }
 

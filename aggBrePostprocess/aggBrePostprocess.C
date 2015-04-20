@@ -240,8 +240,8 @@ Foam::aggBrePostprocess::aggBrePostprocess
         const volScalarField& C_0(CMD[0]);
 
         // Check whether strain rate tensor is not on objectRegistry
-        if(C_0.db().foundObject<volTensorField>(word("E")))
-        {
+        if(C_0.db().foundObject<volSymmTensorField>(word("E")))
+        {            
             G_.set
             (
                 new volScalarField
@@ -419,12 +419,17 @@ Foam::tmp<volScalarField> Foam::aggBrePostprocess::G() const
 {
     // update shear rate
     const volScalarField& C_0(CMD_[0]);
-    const volTensorField& E
-    (
-        C_0.db().lookupObject<volTensorField>(word("E"))
-    );
+//    const volSymmTensorField& E
+//    (
+//        C_0.db().lookupObject<volSymmTensorField>(word("E"))
+//    );
 
-    return 2.0 / sqrt(2.0) * mag(E); // I think this is wrong. Rather check eigenvalues
+//    volVectorField eigValE(eigenValues(E));
+
+//    return 2 * eigValE.component(vector::Z);
+
+    const volScalarField& G(C_0.db().lookupObject<volScalarField>(word("G")));
+    return G;
 }
 
 
@@ -535,8 +540,11 @@ Foam::tmp<volScalarField> Foam::aggBrePostprocess::rMean() const
 
 Foam::tmp<volScalarField> Foam::aggBrePostprocess::PA() const
 {
-    return 100.0 * (1.0 - CMD_[0] / (M_1() +
-                dimensionedScalar("VSMALL", dimMoles / dimVolume, VSMALL)));
+    return 100.0 * (1.0
+                    - CMD_[0] / (M_1()
+                                 + dimensionedScalar("VSMALL", dimMoles / dimVolume, VSMALL)
+                                 )
+                    );
 }
 
 
@@ -645,6 +653,11 @@ void Foam::aggBrePostprocess::update()
         if(rMean_.valid())
         {
             rMean_() = rMean();
+        }
+
+        if(PA_.valid())
+        {
+            PA_() = PA();
         }
 
         if(G_.valid())
