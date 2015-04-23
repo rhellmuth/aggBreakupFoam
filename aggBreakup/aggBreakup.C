@@ -185,16 +185,19 @@ void Foam::aggBreakup::updateAggKernel(const label& celli)
 
     if(isShearAggOn_)
     {
-        scalar G(maxShearRate_()[celli]);
+        scalar Gi(GA_()[celli]);
 
-        scalar alpha(4./3.);
-        // NOTE: implement general alpha later
+        // alpha = 1.3333 ~ 1.3963, very small variation depending on the eigenvalues of the strain
+        // rate tensor E.
+        //                   eigVal(E) = (k * E_max, (1 - k) * E_max, -E_max)
+        // alpha = 1.33... in simple shear, which is the experimental condition.
+        scalar alpha(1.33333);
 
         for(int i = 0; i < nBins_; ++i)
         {
            for(int j = 0; j < nBins_; ++j)
            {
-               aggKernel_()[i][j] += alpha * G * shearAggKernel_()[i][j];
+               aggKernel_()[i][j] += alpha * Gi * shearAggKernel_()[i][j];
            }
         }
     }
@@ -237,9 +240,9 @@ void Foam::aggBreakup::updateBreKernel(const label& celli)
     {
         for(int i = 1; i < nBins_; ++i) // begins at i=0 because monomer does not break
         {
-            scalar G(maxShearRate_()[celli]);
+            scalar Gi(GA_()[celli]);
 
-            breKernel_()[i] = pow(G / Gstar_.value(), b_) * Rc_()[i];
+            breKernel_()[i] = pow(Gi / Gstar_.value(), b_) * Rc_()[i];
         }
     }
 }
@@ -318,7 +321,6 @@ Foam::aggBreakup::~aggBreakup()
         }
         delete [] chi_;
     }
-
 }
 
 
@@ -512,8 +514,6 @@ void Foam::aggBreakup::setCMD()
             );
         }
     }
-
-
 }
 
 void Foam::aggBreakup::setPBE()
@@ -545,9 +545,7 @@ void Foam::aggBreakup::setPBE()
             }
         }
 
-        //NEEDS DEBUG!!!
-
-        //no aggregation into the last bin
+        //NEEDS DEBUG!!! No aggregation into the last bin...
         for(int k = 0; k < nBins_ - 1; ++k)
         {
             for(int i = 0; i < nBins_; ++i)
@@ -650,52 +648,27 @@ void Foam::aggBreakup::setPBE()
                 }
             }
 
-            // For some reason, the eigenvalues cannot be calculated from fvc::grad(U_) at the first
-            // time step if all Exx = Eyy = Ezz. (SMALL > VSMALL)
-
-            strainRate_.set
-            (
-                new volSymmTensorField
-                (
-                    IOobject
-                    (
-                        "E",
-                        runTime_.timeName(),
-                        mesh_,
-                        IOobject::NO_READ,
-                        IOobject::AUTO_WRITE
-                    ),
-                    symm(fvc::grad(U_)())
-                    + dimensionedSymmTensor
-                    (
-                        "VSMALL",
-                        dimless / dimTime,
-                        symmTensor(VSMALL, VSMALL, VSMALL, SMALL, VSMALL, VSMALL)
-                    )
-                )
-            );
-
-            Info << "Writing field E" << nl << endl;
-            strainRate_->write();
-
-            maxShearRate_.set
+            // According to Pedocchi & Piedra-Cueva (2005) the aggregation kernel in general flow
+            // depends on the absolute velocity gradient, as had been previously formulated by
+            // Camp & Stein (1943).
+            GA_.set
             (
                 new volScalarField
                 (
                     IOobject
                     (
-                        "G",
+                        "G_A",
                         runTime_.timeName(),
                         mesh_,
                         IOobject::NO_READ,
                         IOobject::AUTO_WRITE
                     ),
-                    2.0 * eigenValues( strainRate_() )().component(vector::Z)
+                    sqrt(2.0) * mag(symm(fvc::grad(U_)()))
                 )
             );
 
-            Info << "Writing field G" << nl << endl;
-            maxShearRate_->write();
+            Info << "Writing field G_A" << nl << endl;
+            GA_->write();
         }
     }
     else
@@ -804,7 +777,6 @@ void Foam::aggBreakup::setPBE()
             << "Breakup OFF!"
             << nl << endl;
     }
-
 }
 
 void Foam::aggBreakup::update()
@@ -821,11 +793,8 @@ void Foam::aggBreakup::update()
 
     if(isShearAggOn_)
     {
-        // update strainRate field
-        strainRate_() = symm(fvc::grad(U_)());
-
-        // update maximum shear rate field
-        maxShearRate_() = 2.0 * eigenValues(strainRate_())().component(vector::Z);
+        // update root-mean-square velocity gradient field
+        GA_() = sqrt(2.0) * mag(symm( fvc::grad(U_)() ));
     }
 
     postProc->update();
@@ -881,28 +850,248 @@ void Foam::aggBreakup::solveAggBreakup()
 
 void Foam::aggBreakup::solveTransport()
 {
-    forAll(CMD_, i)
+    if(isPBEcoupled_)
     {
-        volScalarField& Ci = CMD_[i];
-
-        if(isPBEcoupled_)
+        forAll(CMD_, i)
         {
-            CMDold_[i] = Ci;
+            // CMDold stores CMD that is used in the source term S(). Otherwise the source for one
+            // cluster would be computed with values partially of step t, and partially of t+dt.
+            CMDold_[i] = CMD_[i];
         }
-        else
+
+        forAll(CMD_, i)
         {
-            tmp<fvScalarMatrix> massTransport
+//            S(i)().write();
+
+            volScalarField& Ci = CMD_[i];
+
+            fvScalarMatrix massTransport
             (
                 fvm::ddt(Ci)
               + fvm::div(phi_, Ci, "div(phi,C_*)")
 //              - fvm::laplacian(D, Ci, "laplacian(D,C_*)")
+              ==
+                S(i)
             );
 
-            massTransport().solve(mesh_.solver("C_*"));
+            massTransport.relax();
+            massTransport.solve(mesh_.solver("C_*"));
+        }
+    }
+    else
+    {
+        forAll(CMD_, i)
+        {
+            volScalarField& Ci = CMD_[i];
+
+            fvScalarMatrix massTransport
+            (
+                fvm::ddt(Ci)
+              + fvm::div(phi_, Ci, "div(phi,C_*)")
+        //              - fvm::laplacian(D, Ci, "laplacian(D,C_*)")
+            );
+
+            massTransport.solve(mesh_.solver("C_*"));
         }
     }
 }
 
+//-This is the actual PBE
+Foam::tmp<volScalarField> Foam::aggBreakup::S(label clusterI) const
+{
+    label& i = clusterI;
+
+    // assign auxiliary fields
+    volScalarField aggregation
+    (
+        IOobject
+        (
+            "aggregation",
+            runTime_.timeName(),
+            mesh_
+        ),
+        mesh_,
+        dimensionedScalar("dC_i/dt", dimMoles/dimVolume/dimTime, 0.0)
+    );
+    volScalarField breakup
+    (
+        IOobject
+        (
+            "breakup",
+            runTime_.timeName(),
+            mesh_
+        ),
+        mesh_,
+        dimensionedScalar("dC_i/dt", dimMoles/dimVolume/dimTime, 0.0)
+    );
+
+    // aggregation PBE by Smoluchowski (1917)
+    if(isBrowninanAggOn_ || isShearAggOn_)
+    {
+        volScalarField creation
+        (
+            IOobject
+            (
+                "creation",
+                runTime_.timeName(),
+                mesh_
+            ),
+            mesh_,
+            dimensionedScalar("dC_i/dt", dimMoles/dimVolume/dimTime, 0.0)
+        );
+        volScalarField destruction
+        (
+            IOobject
+            (
+                "destruction",
+                runTime_.timeName(),
+                mesh_
+            ),
+            mesh_,
+            dimensionedScalar("dC_i/dt", dimMoles/dimVolume/dimTime, 0.0)
+        );
+
+        if(isGridUniform_)
+        {
+            for(int j = 0; j < i; ++j)
+            {
+                creation += 0.5 * kag(i-j-1, j) * CMDold_[i-j-1] * CMDold_[j];
+            }
+            for(int j = 0; j < nBins_; ++j)
+            {
+                destruction += kag(i, j) * CMDold_[i] * CMDold_[j];
+            }
+        }
+        else
+        {
+            for(int j = 0; j < nBins_; ++j)
+            {
+                for(int k = 0; k < nBins_; ++k)
+                {
+                    creation += 0.5 * chi_[j][k][i] * kag(j, k) * CMDold_[j] * CMDold_[k];
+                }
+            }
+            for(int j = 0; j < nBins_; ++j)
+            {
+                destruction += kag(i, j) * CMDold_[i] * CMDold_[j];
+            }
+        }
+
+        aggregation = eta_ * ( creation - destruction);
+    }
+
+    // breakup PBE by Pandya & Spielman (1982)
+    if(isBreakupOn_)
+    {
+        volScalarField creation
+        (
+            IOobject
+            (
+                "creation",
+                runTime_.timeName(),
+                mesh_
+            ),
+            mesh_,
+            dimensionedScalar("dC_i/dt", dimMoles/dimVolume/dimTime, 0.0)
+        );
+        volScalarField destruction
+        (
+            IOobject
+            (
+                "destruction",
+                runTime_.timeName(),
+                mesh_
+            ),
+            mesh_,
+            dimensionedScalar("dC_i/dt", dimMoles/dimVolume/dimTime, 0.0)
+        );
+
+        for(int j = i + 1; j < nBins_; ++j)
+        {
+            creation += fragMassDistr_()[i][j] * kbr(j) * CMDold_[j];
+        }
+
+        destruction = kbr(i) * CMDold_[i];
+
+        breakup = creation - destruction;
+    }
+
+    tmp<volScalarField> output
+    (
+        new volScalarField
+        (
+            IOobject
+            (
+                "S_" + to_string(vList_[i]),
+                runTime_.timeName(),
+                mesh_
+            ),
+            aggregation + breakup
+        )
+    );
+
+    return output;
+}
+
+Foam::tmp<volScalarField> Foam::aggBreakup::kag(label i, label j) const
+{
+    tmp<volScalarField> k
+    (
+        new volScalarField
+        (
+            IOobject
+            (
+                "kag",
+                runTime_.timeName(),
+                mesh_
+            ),
+            mesh_,
+            dimensionedScalar("dC_i/dt", dimVolume/dimMoles/dimTime, 0.0)
+        )
+    );
+
+    if(isBrowninanAggOn_)
+    {
+        //Boltzmann constant [J K−1] = []
+        scalar kB(1.3806488E-23);
+
+        k->internalField() += 2./3. * kB * T_.value()
+                             / mu_.internalField() * brownianAggKernel_()[i][j];
+    }
+    if(isShearAggOn_)
+    {
+        // alpha = 1.3333 ~ 1.3963, very small variation depending on the eigenvalues of the strain
+        // rate tensor E.
+        //                   eigVal(E) = (k * E_max, (1 - k) * E_max, -E_max)
+        // alpha = 1.33... in simple shear, which is the experimental condition.
+        scalar alpha(1.33333);
+
+        k->internalField() += alpha * GA_() * shearAggKernel_()[i][j];
+    }
+
+    return k;
+}
+
+Foam::tmp<volScalarField> Foam::aggBreakup::kbr(label i) const
+{
+    dimensionedScalar alin("a\'", dimless/dimTime, 1.0);
+
+    tmp<volScalarField> k
+    (
+        new volScalarField
+        (
+            IOobject
+            (
+                "kbr",
+                runTime_.timeName(),
+                mesh_
+            ),
+            alin * pow(GA_() / Gstar_, b_) * Rc_()[i]
+        )
+    );
+
+    return k;
+}
 
 bool Foam::aggBreakup::writeData(Ostream& os) const
 {

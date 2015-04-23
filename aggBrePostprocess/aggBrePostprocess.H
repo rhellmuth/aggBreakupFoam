@@ -89,9 +89,6 @@ class aggBrePostprocess
         bool isCellFlowCharTimeOn_;
         bool isAggAdvRatioOn_;
 
-        //-Strain rate
-        autoPtr<volScalarField> G_;
-
         //-Aggregation characteristic time field
         autoPtr<volScalarField> ta_;
 
