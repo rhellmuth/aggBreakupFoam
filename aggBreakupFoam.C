@@ -105,8 +105,7 @@ int main(int argc, char *argv[])
             U.correctBoundaryConditions();
         }
 
-        aggBreakupSystem.solveTransport();
-        aggBreakupSystem.solveAggBreakup();
+        aggBreakupSystem.update();
 
         // ---  Write run time
 

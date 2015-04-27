@@ -80,10 +80,14 @@ class aggBreakup
         //-Colloid cluster fields
         PtrList<volScalarField> CMD_;
 
-        //-Strain rate field
-        autoPtr<volTensorField> strainRate_;
+        PtrList<volScalarField> CMDold_;
+
+        //-Absolute velocity gradient
+        autoPtr<volScalarField> GA_;
 
         // CMD discretization scheme data
+
+            bool isPBEcoupled_;
 
             autoPtr<IOdictionary> aggBreakupDict_;
 
@@ -209,6 +213,10 @@ class aggBreakup
         void updateAggKernel(const label& celli);
         void updateBreKernel(const label& celli);
 
+        tmp<volScalarField> S(label clusterI) const;
+
+        tmp<volScalarField> kag(label i, label j) const;
+        tmp<volScalarField> kbr(label i) const;
 
 public:
 
@@ -256,6 +264,8 @@ public:
         // Check
 
         // Edit
+
+            void update();
 
             void solveAggBreakup();
 

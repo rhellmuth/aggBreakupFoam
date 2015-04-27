@@ -240,30 +240,8 @@ Foam::aggBrePostprocess::aggBrePostprocess
         const volScalarField& C_0(CMD[0]);
 
         // Check whether strain rate tensor is not on objectRegistry
-        if(C_0.db().foundObject<volTensorField>(word("E")))
-        {
-            const volTensorField& E
-            (
-                C_0.db().lookupObject<volTensorField>(word("E"))
-            );
-            G_.set
-            (
-                new volScalarField
-                (
-                    IOobject
-                    (
-                        "G",
-                        runTime_.timeName(),
-                        mesh_,
-                        IOobject::NO_READ,
-                        IOobject::AUTO_WRITE
-                    ),
-                    mag(E)/ sqrt(2.0)
-                )
-            );
-
-            G_->write();
-
+        if(C_0.db().foundObject<volScalarField>(word("G_A")))
+        {            
             if(isAggCharTimeOn_)
             {
                 ta_.set
@@ -334,8 +312,8 @@ Foam::aggBrePostprocess::aggBrePostprocess
         else
         {
             WarningIn("Foam::aggBreakupPostprocess::aggBreakupPostprocess")
-                << "Characteristic times dependent on strain rate (E) "
-                << "cannot be calculated because E is not defined on the "
+                << "Characteristic times dependent on absolute shear rate (G_A) "
+                << "cannot be calculated because G_A is not defined on the "
                 << "objectRegistry"
                 << nl << endl;
         }
@@ -418,6 +396,16 @@ Foam::aggBrePostprocess::~aggBrePostprocess()
 
 
 // * * * * * * * * * * * * * * Member Functions  * * * * * * * * * * * * * * //
+
+Foam::tmp<volScalarField> Foam::aggBrePostprocess::G() const
+{
+    // update shear rate
+    const volScalarField& C_0(CMD_[0]);
+
+    const volScalarField& G(C_0.db().lookupObject<volScalarField>(word("G_A")));
+    return G;
+}
+
 
 Foam::tmp<volScalarField> Foam::aggBrePostprocess::M_0() const
 {
@@ -526,8 +514,11 @@ Foam::tmp<volScalarField> Foam::aggBrePostprocess::rMean() const
 
 Foam::tmp<volScalarField> Foam::aggBrePostprocess::PA() const
 {
-    return 100.0 * (1.0 - CMD_[0] / (M_1() +
-                dimensionedScalar("VSMALL", dimMoles / dimVolume, VSMALL)));
+    return 100.0 * (1.0
+                    - CMD_[0] / (M_1()
+                                 + dimensionedScalar("VSMALL", dimMoles / dimVolume, VSMALL)
+                                 )
+                    );
 }
 
 
@@ -537,7 +528,7 @@ Foam::tmp<volScalarField> Foam::aggBrePostprocess::t_a() const
     dimensionedScalar alpha("alpha", dimless/dimMoles, 4./3.);
     const dimensionedScalar& R_mono(rList_[0]);
 
-    return 1.0 / (eta * alpha * G_() * pow(R_mono, 3.) * M_1()
+    return 1.0 / (eta * alpha * G() * pow(R_mono, 3.) * M_1()
                   + dimensionedScalar("VSMALL", dimless/dimTime, VSMALL));
 }
 
@@ -561,7 +552,7 @@ Foam::tmp<volScalarField> Foam::aggBrePostprocess::t_b() const
         Gstar = alin / (a * pow(R_mono, c) + VSMALL);
     }
 
-    return 1.0 / (pow( G_()/Gstar + VSMALL, b) + VSMALL);
+    return 1.0 / (pow( G()/Gstar + VSMALL, b) + VSMALL);
 }
 
 
@@ -604,76 +595,75 @@ Foam::tmp<volScalarField> Foam::aggBrePostprocess::t_f() const
 
 Foam::tmp<volScalarField> Foam::aggBrePostprocess::Da() const
 {
-
     return t_f()/t_a();
 }
 
 
 void Foam::aggBrePostprocess::update()
 {
-    if(zerothMoment_.valid())
+    if(runTime_.outputTime()) //calculate only at outputTime
     {
-        zerothMoment_() = M_0();
-    }
+        if(zerothMoment_.valid())
+        {
+            zerothMoment_() = M_0();
+        }
 
-    if(firstMoment_.valid())
-    {
-        firstMoment_() = M_1();
-    }
+        if(firstMoment_.valid())
+        {
+            firstMoment_() = M_1();
+        }
 
-    if(secondMoment_.valid())
-    {
-        secondMoment_() = M_2();
-    }
+        if(secondMoment_.valid())
+        {
+            secondMoment_() = M_2();
+        }
 
-    if(vMean_.valid())
-    {
-        vMean_() = vMean();
-    }
+        if(vMean_.valid())
+        {
+            vMean_() = vMean();
+        }
 
-    if(rMean_.valid())
-    {
-        rMean_() = rMean();
-    }
+        if(rMean_.valid())
+        {
+            rMean_() = rMean();
+        }
 
-    if(G_.valid())
-    {
-        // update shear rate
+        if(PA_.valid())
+        {
+            PA_() = PA();
+        }
+
         const volScalarField& C_0(CMD_[0]);
-        const volTensorField& E
-        (
-            C_0.db().lookupObject<volTensorField>(word("E"))
-        );
-        G_() = mag(E) / sqrt(2.0); // I think this is wrong. Rather check eigenvalues
 
-        if(ta_.valid())
+        // Check whether strain rate tensor is not on objectRegistry
+        if(C_0.db().foundObject<volScalarField>(word("G_A")))
         {
-            ta_() = t_a();
-        }
+            if(ta_.valid())
+            {
+                ta_() = t_a();
+            }
 
-        if(tb_.valid())
-        {
-            tb_() = t_b();
-        }
+            if(tb_.valid())
+            {
+                tb_() = t_b();
+            }
 
-        if(theta_.valid())
-        {
-            theta_() = theta();
-        }
+            if(theta_.valid())
+            {
+                theta_() = theta();
+            }
 
-        if(tf_.valid())
-        {
-            tf_() = t_f();
-        }
+            if(tf_.valid())
+            {
+                tf_() = t_f();
+            }
 
-        if(Da_.valid())
-        {
-            Da_() = Da();
+            if(Da_.valid())
+            {
+                Da_() = Da();
+            }
         }
     }
-
-
-
 }
 
 // * * * * * * * * * * * * * * Member Operators  * * * * * * * * * * * * * * //
@@ -724,7 +714,6 @@ Foam::Ostream& Foam::operator<<(Ostream& os, const aggBrePostprocess& sds)
     os.writeKeyword("isRmeanOn") << sds.isRmeanOn_
                                  << token::END_STATEMENT
                                  << endl;
-
     return os;
 }
 
