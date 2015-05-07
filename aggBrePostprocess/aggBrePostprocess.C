@@ -105,7 +105,7 @@ Foam::aggBrePostprocess::aggBrePostprocess
 
     if(isZerothMomentOn_)
     {
-        zerothMoment_.set
+        M0_.set
         (
             new volScalarField
             (
@@ -122,11 +122,11 @@ Foam::aggBrePostprocess::aggBrePostprocess
         );
 
         Info << "Writing field M_0" << nl << endl;
-        zerothMoment_->write();
+        M0_->write();
     }
     if(isFirstMomentOn_)
     {
-        firstMoment_.set
+        M1_.set
         (
             new volScalarField
             (
@@ -143,11 +143,11 @@ Foam::aggBrePostprocess::aggBrePostprocess
         );
 
         Info << "Writing field M_1" << nl << endl;
-        firstMoment_->write();
+        M1_->write();
     }
     if(isSecondMomentOn_)
     {
-        secondMoment_.set
+        M2_.set
         (
             new volScalarField
             (
@@ -164,7 +164,7 @@ Foam::aggBrePostprocess::aggBrePostprocess
         );
 
         Info << "Writing field M_2" << nl << endl;
-        secondMoment_->write();
+        M2_->write();
     }
 
     if(isVmeanOn_)
@@ -483,7 +483,10 @@ Foam::tmp<volScalarField> Foam::aggBrePostprocess::M_2() const
 
 Foam::tmp<volScalarField> Foam::aggBrePostprocess::vMean() const
 {
-    return M_1() / M_0();
+    return
+    (
+        M_1() / (M_0() + dimensionedScalar("VSMALL", M0_->dimensions(), VSMALL))
+    );
 }
 
 Foam::tmp<volScalarField> Foam::aggBrePostprocess::rMean() const
@@ -508,7 +511,10 @@ Foam::tmp<volScalarField> Foam::aggBrePostprocess::rMean() const
         RiCi() += CMD_[i] * rList_[i];
     }
 
-    return RiCi() / M_0();
+    return
+    (
+        RiCi() / (M_0() + dimensionedScalar("VSMALL", M0_->dimensions(), VSMALL))
+    );
 }
 
 
@@ -528,8 +534,10 @@ Foam::tmp<volScalarField> Foam::aggBrePostprocess::t_a() const
     dimensionedScalar alpha("alpha", dimless/dimMoles, 4./3.);
     const dimensionedScalar& R_mono(rList_[0]);
 
-    return 1.0 / (eta * alpha * G() * pow(R_mono, 3.) * M_1()
-                  + dimensionedScalar("VSMALL", dimless/dimTime, VSMALL));
+    return 1.0 / (
+                    eta * alpha * G() * pow(R_mono, 3.) * M_1()
+                  + dimensionedScalar("VSMALL", dimless/dimTime, VSMALL)
+                 );
 }
 
 
@@ -558,7 +566,10 @@ Foam::tmp<volScalarField> Foam::aggBrePostprocess::t_b() const
 
 Foam::tmp<volScalarField> Foam::aggBrePostprocess::theta() const
 {
-    return t_a() / (t_b() + VSMALL);
+    return
+    (
+        t_a() / (t_b() + dimensionedScalar("VSMALL", tb_->dimensions(), VSMALL))
+    );
 }
 
 
@@ -595,7 +606,10 @@ Foam::tmp<volScalarField> Foam::aggBrePostprocess::t_f() const
 
 Foam::tmp<volScalarField> Foam::aggBrePostprocess::Da() const
 {
-    return t_f()/t_a();
+    return
+    (
+        t_f() / (t_a() + dimensionedScalar("VSMALL", ta_->dimensions(), VSMALL))
+    );
 }
 
 
@@ -603,19 +617,19 @@ void Foam::aggBrePostprocess::update()
 {
     if(runTime_.outputTime()) //calculate only at outputTime
     {
-        if(zerothMoment_.valid())
+        if(M0_.valid())
         {
-            zerothMoment_() = M_0();
+            M0_() = M_0();
         }
 
-        if(firstMoment_.valid())
+        if(M1_.valid())
         {
-            firstMoment_() = M_1();
+            M1_() = M_1();
         }
 
-        if(secondMoment_.valid())
+        if(M2_.valid())
         {
-            secondMoment_() = M_2();
+            M2_() = M_2();
         }
 
         if(vMean_.valid())

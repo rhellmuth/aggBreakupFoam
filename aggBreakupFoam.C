@@ -60,7 +60,7 @@ int main(int argc, char *argv[])
         (
             fvm::ddt(U)
           + fvm::div(phi, U)
-          - fvm::laplacian(nu, U)
+          - fvm::laplacian(nu, U) // nu = mu /rho
         );
 
         solve(UEqn == -fvc::grad(p));

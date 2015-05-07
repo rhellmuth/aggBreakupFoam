@@ -17,6 +17,11 @@
         transportProperties.lookup("nu")
     );
 
+    dimensionedScalar rho
+    (
+        transportProperties.lookup("rho")
+    );
+
     Info<< "Reading field p\n" << endl;
     volScalarField p
     (
@@ -54,7 +59,7 @@
             "mu",
             runTime.timeName(),
             mesh,
-            IOobject::READ_IF_PRESENT,
+            IOobject::MUST_READ,
             IOobject::AUTO_WRITE
         ),
         mesh

@@ -105,13 +105,13 @@ class aggBrePostprocess
         //scalar ta_;
 
         //-Zeroth moment field
-        autoPtr<volScalarField> zerothMoment_;
+        autoPtr<volScalarField> M0_;
 
         //-First moment field
-        autoPtr<volScalarField> firstMoment_;
+        autoPtr<volScalarField> M1_;
 
         //-Second moment field
-        autoPtr<volScalarField> secondMoment_;
+        autoPtr<volScalarField> M2_;
 
         //-Mean number of monomers per aggregate
         autoPtr<volScalarField> vMean_;
@@ -204,7 +204,7 @@ public:
 
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 
-#include "aggBrePostprocessI.H"
+//#include "aggBrePostprocessI.H"
 
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 

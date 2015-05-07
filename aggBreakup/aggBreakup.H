@@ -166,9 +166,9 @@ class aggBreakup
             // Activation rule
 
                 bool isActivationOn_;
-                scalar activThreshould_;
+                scalar activThreshold_; //shear rate
                 scalar activRate_;
-                autoPtr<volScalarField> Cr_;
+                autoPtr<volScalarField> Crp_;
 
         // ODE solver
         autoPtr<ODESolver> solver_;

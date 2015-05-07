@@ -348,6 +348,15 @@ void Foam::aggBreakup::readDict(string dictName)
 
     isPBEcoupled_ = readBool(aggBreakupDict_->lookup("isPBEcoupled"));
 
+    if(!isPBEcoupled_)
+    {
+        // Create the selected ODE system solver
+        solver_ =  ODESolver::New(
+                                    *this,
+                                    aggBreakupDict_->subDict("odeSolver")
+                                  );
+    }
+
     isGridUniform_ = readBool(aggBreakupDict_->lookup("isGridUniform"));
     nBins_ = readLabel( aggBreakupDict_->lookup("nBins") );
     Rmono_ = aggBreakupDict_->lookup("Rmono");
@@ -364,11 +373,9 @@ void Foam::aggBreakup::readDict(string dictName)
     b_ = readScalar(aggBreakupDict_->lookup("b"));
     c_ = readScalar(aggBreakupDict_->lookup("c"));
 
-    // Create the selected ODE system solver
-    solver_ =  ODESolver::New(
-                                *this,
-                                aggBreakupDict_->subDict("odeSolver")
-                              );
+    isActivationOn_ = readBool(aggBreakupDict_->lookup("isActivationOn"));
+    activThreshold_ = readScalar(aggBreakupDict_->lookup("activThreshold"));
+
 }
 
 
@@ -513,6 +520,27 @@ void Foam::aggBreakup::setCMD()
                 )
             );
         }
+    }
+
+    if(isActivationOn_)
+    {
+        Info << "Reading field " << "C_RP"<< nl << endl;
+
+        Crp_.set
+        (
+            new volScalarField
+            (
+                IOobject
+                (
+                    "C_RP",
+                    runTime_.timeName(),
+                    mesh_,
+                    IOobject::MUST_READ,
+                    IOobject::AUTO_WRITE
+                ),
+                mesh_
+            )
+        );
     }
 }
 
@@ -781,20 +809,76 @@ void Foam::aggBreakup::setPBE()
 
 void Foam::aggBreakup::update()
 {
+    if(isShearAggOn_)
+    {
+        // update the absolute velocity gradient field
+        GA_() = sqrt(2.0) * mag(symm( fvc::grad(U_)() ));
+    }
+
+    if(isActivationOn_)
+    {
+        //solve transport of resting platelets
+        fvScalarMatrix massTransport
+        (
+            fvm::ddt(Crp_())
+          + fvm::div(phi_, Crp_(), "div(phi,C_*)")
+//              - fvm::laplacian(D, Ci, "laplacian(D,C_*)")
+        );
+        massTransport.solve(mesh_.solver("C_*"));
+
+        //activate platelets
+        forAll(GA_->internalField(),i)
+        {
+            if(GA_->internalField()[i] >= activThreshold_)
+            {
+                // C_RP -> C_1
+                CMD_[0].internalField()[i] += max(Crp_->internalField()[i], 0.0);
+                // C_RP = 0
+                Crp_->internalField()[i] = 0.0;
+            }
+        }
+    }
+
     if(isPBEcoupled_)
     {
-        solveTransport();
+        forAll(CMD_, i)
+        {
+            // CMDold stores CMD that is used in the source term S(). Otherwise the source for one
+            // cluster would be computed with values partially of step t, and partially of t+dt.
+            CMDold_[i] = CMD_[i];
+        }
+
+        forAll(CMD_, i)
+        {
+            volScalarField& Ci = CMD_[i];
+            fvScalarMatrix massTransport
+            (
+                fvm::ddt(Ci)
+              + fvm::div(phi_, Ci, "div(phi,C_*)")
+//              - fvm::laplacian(D, Ci, "laplacian(D,C_*)")
+              ==
+                S(i)
+            );
+            massTransport.relax();
+            massTransport.solve(mesh_.solver("C_*"));
+        }
     }
     else
     {
-        solveTransport();
-        solveAggBreakup();
-    }
+        //solve transport
+        forAll(CMD_, i)
+        {
+            volScalarField& Ci = CMD_[i];
+            fvScalarMatrix massTransport
+            (
+                fvm::ddt(Ci)
+              + fvm::div(phi_, Ci, "div(phi,C_*)")
+        //              - fvm::laplacian(D, Ci, "laplacian(D,C_*)")
+            );
+            massTransport.solve(mesh_.solver("C_*"));
+        }
 
-    if(isShearAggOn_)
-    {
-        // update root-mean-square velocity gradient field
-        GA_() = sqrt(2.0) * mag(symm( fvc::grad(U_)() ));
+        solveAggBreakup();
     }
 
     postProc->update();
@@ -861,8 +945,6 @@ void Foam::aggBreakup::solveTransport()
 
         forAll(CMD_, i)
         {
-//            S(i)().write();
-
             volScalarField& Ci = CMD_[i];
 
             fvScalarMatrix massTransport
