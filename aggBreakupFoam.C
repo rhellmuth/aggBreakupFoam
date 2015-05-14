@@ -42,7 +42,7 @@ int main(int argc, char *argv[])
     #include "createFields.H"
     #include "initContinuityErrs.H"
 
-    aggBreakup aggBreakupSystem(U, phi, mu);
+    aggBreakup aggBreakupSystem(U, phi);
 
 
     // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
@@ -53,57 +53,57 @@ int main(int argc, char *argv[])
     {
         Info<< "Time = " << runTime.timeName() << nl << endl;
 
-        #include "readPISOControls.H"
+//        #include "readPISOControls.H"
         #include "CourantNo.H"
 
-        fvVectorMatrix UEqn
-        (
-            fvm::ddt(U)
-          + fvm::div(phi, U)
-          - fvm::laplacian(nu, U) // nu = mu /rho
-        );
+//        fvVectorMatrix UEqn
+//        (
+//            fvm::ddt(U)
+//          + fvm::div(phi, U)
+//          - fvm::laplacian(nu, U) // nu = mu /rho
+//        );
 
-        solve(UEqn == -fvc::grad(p));
+//        solve(UEqn == -fvc::grad(p));
 
-        // --- PISO loop
+//        // --- PISO loop
 
-        for (int corr=0; corr<nCorr; corr++)
-        {
-            volScalarField rAU(1.0/UEqn.A());
+//        for (int corr=0; corr<nCorr; corr++)
+//        {
+//            volScalarField rAU(1.0/UEqn.A());
 
-            volVectorField HbyA("HbyA", U);
-            HbyA = rAU*UEqn.H();
-            surfaceScalarField phiHbyA
-            (
-                "phiHbyA",
-                (fvc::interpolate(HbyA) & mesh.Sf())
-              + fvc::interpolate(rAU)*fvc::ddtCorr(U, phi)
-            );
+//            volVectorField HbyA("HbyA", U);
+//            HbyA = rAU*UEqn.H();
+//            surfaceScalarField phiHbyA
+//            (
+//                "phiHbyA",
+//                (fvc::interpolate(HbyA) & mesh.Sf())
+//              + fvc::interpolate(rAU)*fvc::ddtCorr(U, phi)
+//            );
 
-            adjustPhi(phiHbyA, U, p);
+//            adjustPhi(phiHbyA, U, p);
 
-            for (int nonOrth=0; nonOrth<=nNonOrthCorr; nonOrth++)
-            {
-                fvScalarMatrix pEqn
-                (
-                    fvm::laplacian(rAU, p) == fvc::div(phiHbyA)
-                );
+//            for (int nonOrth=0; nonOrth<=nNonOrthCorr; nonOrth++)
+//            {
+//                fvScalarMatrix pEqn
+//                (
+//                    fvm::laplacian(rAU, p) == fvc::div(phiHbyA)
+//                );
 
-                pEqn.setReference(pRefCell, pRefValue);
-                pEqn.solve();
+//                pEqn.setReference(pRefCell, pRefValue);
+//                pEqn.solve();
 
-                if (nonOrth == nNonOrthCorr)
-                {
-                    phi = phiHbyA - pEqn.flux();
-                }
-            }
+//                if (nonOrth == nNonOrthCorr)
+//                {
+//                    phi = phiHbyA - pEqn.flux();
+//                }
+//            }
 
 
-            #include "continuityErrs.H"
+//            #include "continuityErrs.H"
 
-            U = HbyA - rAU*fvc::grad(p);
-            U.correctBoundaryConditions();
-        }
+//            U = HbyA - rAU*fvc::grad(p);
+//            U.correctBoundaryConditions();
+//        }
 
         aggBreakupSystem.update();
 

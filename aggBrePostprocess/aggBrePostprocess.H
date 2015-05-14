@@ -77,6 +77,7 @@ class aggBrePostprocess
         //- Swiches
         bool isThetaFieldOn_;
         bool isAggCharTimeOn_;
+        bool isDifAggCharTime_;
         bool isBreCharTimeOn_;
         bool isAggPecletOn_;
         bool isAvgConcentrationOn_;
@@ -86,20 +87,26 @@ class aggBrePostprocess
         bool isVmeanOn_;
         bool isRmeanOn_;
         bool isAggFractionOn_;
-        bool isCellFlowCharTimeOn_;
-        bool isAggAdvRatioOn_;
+        bool isAdvCharTimeOn_;
+        bool isAggDamkoehlerOn_;
 
         //-Aggregation characteristic time field
-        autoPtr<volScalarField> ta_;
+        autoPtr<volScalarField> tagg_;
 
         //-Breakup characteristic time field
-        autoPtr<volScalarField> tb_;
+        autoPtr<volScalarField> tbre_;
+
+        //-Diffusion characteristic time for aggregation
+        autoPtr<volScalarField> tdif_;
+
+        //-Advection characteristic time
+        autoPtr<volScalarField> tadv_;
 
         //-Aggregation-breakup ratio field
         autoPtr<volScalarField> theta_;
 
-        //-Aggregation Péclet number field
-        autoPtr<volScalarField> aggPe_;
+        //-Aggregation Péclet number for (shear agg rate / diffusion agg rate)
+        autoPtr<volScalarField> Pe_;
 
         //-Average monomer concentration in the whole system
         //scalar ta_;
@@ -122,10 +129,7 @@ class aggBrePostprocess
         //-Aggregation fraction in %
         autoPtr<volScalarField> PA_;
 
-        //-Convection characteristic time
-        autoPtr<volScalarField> tf_;
-
-        //-Damköhler number for aggregation rate / advection rate
+        //-Damköhler number for (aggregation rate / advection rate)
         autoPtr<volScalarField> Da_;
 
 
@@ -176,14 +180,14 @@ public:
         tmp<volScalarField> M_2() const;
         tmp<volScalarField> vMean() const;
         tmp<volScalarField> rMean() const;
-        tmp<volScalarField> t_a() const;
-        tmp<volScalarField> t_b() const;
+        tmp<volScalarField> t_agg() const;
+        tmp<volScalarField> t_bre() const;
         tmp<volScalarField> theta() const;
         tmp<volScalarField> PA() const;
-        tmp<volScalarField> t_f() const;
+        tmp<volScalarField> t_adv() const;
         tmp<volScalarField> Da() const;
-//        tmp<volScalarField> t_d() const;
-//        tmp<volScalarField> Pe() const;
+        tmp<volScalarField> t_dif() const;
+        tmp<volScalarField> Pe() const;
 
         void update();
 

@@ -17,10 +17,10 @@
         transportProperties.lookup("nu")
     );
 
-    dimensionedScalar rho
-    (
-        transportProperties.lookup("rho")
-    );
+//    dimensionedScalar rho
+//    (
+//        transportProperties.lookup("rho")
+//    );
 
     Info<< "Reading field p\n" << endl;
     volScalarField p
@@ -51,29 +51,15 @@
         mesh
     );
 
-    Info<< "Reading field mu\n" << endl;
-    volScalarField mu
-    (
-        IOobject
-        (
-            "mu",
-            runTime.timeName(),
-            mesh,
-            IOobject::MUST_READ,
-            IOobject::AUTO_WRITE
-        ),
-        mesh
-    );
-
-//    Info<< "Reading field D\n" << endl;
-//    volScalarField D
+//    Info<< "Reading field mu\n" << endl;
+//    volScalarField mu
 //    (
 //        IOobject
 //        (
-//            "D",
+//            "mu",
 //            runTime.timeName(),
 //            mesh,
-//            IOobject::READ_IF_PRESENT,
+//            IOobject::MUST_READ,
 //            IOobject::AUTO_WRITE
 //        ),
 //        mesh

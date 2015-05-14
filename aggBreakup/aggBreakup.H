@@ -71,9 +71,6 @@ class aggBreakup
         const volVectorField& U_;
         const surfaceScalarField& phi_;
 
-        //-Viscosity
-        const volScalarField& mu_;
-
         const fvMesh& mesh_;
         const Time& runTime_;
 
@@ -133,11 +130,14 @@ class aggBreakup
                 //-Aggregation efficiency
                 scalar eta_;
 
-                //-Shear collision kernel shape factor
-                tmp<volScalarField> alpha_;
-
                 //-Base Temperature
                 dimensionedScalar T_;
+
+                //-Plasma viscosity
+                dimensionedScalar muPlasma_;
+
+                //-Diffusivity
+                PtrList<dimensionedScalar> Dlist_;
 
                 //-Base aggregation kernel (shear excluded)
                 autoPtr<scalarSquareMatrix> brownianAggKernel_;
@@ -232,8 +232,7 @@ public:
         aggBreakup
         (
             const volVectorField& U,
-            const surfaceScalarField& phi,
-            const volScalarField& mu
+            const surfaceScalarField& phi
         );
 
 
@@ -269,8 +268,6 @@ public:
 
             void solveAggBreakup();
 
-            void solveTransport();
-
         // Write
 
             //- WriteData member function required by regIOobject
@@ -289,7 +286,7 @@ public:
 
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 
-#include "aggBreakupI.H"
+//#include "aggBreakupI.H"
 
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 
