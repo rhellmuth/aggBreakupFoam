@@ -75,35 +75,36 @@ class aggBrePostprocess
         const PtrList<dimensionedScalar>& rList_;
 
         //- Swiches
-        bool isThetaFieldOn_;
         bool isAggCharTimeOn_;
         bool isDifAggCharTime_;
         bool isBreCharTimeOn_;
         bool isAggPecletOn_;
-        bool isAvgConcentrationOn_;
+        bool isKabFieldOn_;
+        bool isAdvCharTimeOn_;
+        bool isAggDamkoehlerOn_;
         bool isZerothMomentOn_;
         bool isFirstMomentOn_;
         bool isSecondMomentOn_;
         bool isVmeanOn_;
         bool isRmeanOn_;
-        bool isAggFractionOn_;
-        bool isAdvCharTimeOn_;
-        bool isAggDamkoehlerOn_;
+        bool isPAon_;
+        bool isAvgConcentrationOn_;
+
 
         //-Aggregation characteristic time field
-        autoPtr<volScalarField> tagg_;
+        autoPtr<volScalarField> ta_;
 
         //-Breakup characteristic time field
-        autoPtr<volScalarField> tbre_;
+        autoPtr<volScalarField> tb_;
 
         //-Diffusion characteristic time for aggregation
-        autoPtr<volScalarField> tdif_;
+        autoPtr<volScalarField> td_;
 
         //-Advection characteristic time
         autoPtr<volScalarField> tadv_;
 
         //-Aggregation-breakup ratio field
-        autoPtr<volScalarField> theta_;
+        autoPtr<volScalarField> Kab_;
 
         //-Aggregation Péclet number for (shear agg rate / diffusion agg rate)
         autoPtr<volScalarField> Pe_;
@@ -180,13 +181,13 @@ public:
         tmp<volScalarField> M_2() const;
         tmp<volScalarField> vMean() const;
         tmp<volScalarField> rMean() const;
-        tmp<volScalarField> t_agg() const;
-        tmp<volScalarField> t_bre() const;
-        tmp<volScalarField> theta() const;
+        tmp<volScalarField> t_s() const;
+        tmp<volScalarField> t_b() const;
+        tmp<volScalarField> K_ab() const;
         tmp<volScalarField> PA() const;
         tmp<volScalarField> t_adv() const;
         tmp<volScalarField> Da() const;
-        tmp<volScalarField> t_dif() const;
+        tmp<volScalarField> t_d() const;
         tmp<volScalarField> Pe() const;
 
         void update();

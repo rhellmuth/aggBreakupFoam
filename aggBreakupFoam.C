@@ -53,8 +53,8 @@ int main(int argc, char *argv[])
     {
         Info<< "Time = " << runTime.timeName() << nl << endl;
 
-//        #include "readPISOControls.H"
         #include "CourantNo.H"
+//        #include "readPISOControls.H"
 
 //        fvVectorMatrix UEqn
 //        (

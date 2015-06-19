@@ -104,7 +104,7 @@ class aggBreakup
         // Cluster structure data
 
             //-Monomer mean radius (m)
-            dimensionedScalar Rmono_;
+            dimensionedScalar Rp_;
 
             //-Radius of gyration the cluster 'i'
             PtrList<dimensionedScalar> Rlist_;
@@ -126,6 +126,7 @@ class aggBreakup
 
                 bool isBrowninanAggOn_;
                 bool isShearAggOn_;
+                bool isSorensenianAggOn_;
 
                 //-Aggregation efficiency
                 scalar eta_;
@@ -140,9 +141,9 @@ class aggBreakup
                 PtrList<dimensionedScalar> Dlist_;
 
                 //-Base aggregation kernel (shear excluded)
-                autoPtr<scalarSquareMatrix> brownianAggKernel_;
-                autoPtr<scalarSquareMatrix> shearAggKernel_;
-                autoPtr<scalarSquareMatrix> aggKernel_;
+                autoPtr<scalarSquareMatrix> kdBase_;
+                autoPtr<scalarSquareMatrix> ksBase_;
+                autoPtr<scalarSquareMatrix> kc_;
 
             // Breakup data
 
@@ -155,10 +156,10 @@ class aggBreakup
 
                 //-Base breakup kernel (just the Radii part, shear part
                 // excluded)
-                autoPtr<scalarField> Rc_;
+                autoPtr<scalarField> kbBase_;
 
                 //-Breakup kernel
-                autoPtr<scalarField> breKernel_;
+                autoPtr<scalarField> kb_;
 
                 //-Fragment mass distribution
                 autoPtr<scalarSquareMatrix> fragMassDistr_;
@@ -188,7 +189,7 @@ class aggBreakup
             //- Return number of equations
             virtual label nEqns() const;
 //            {
-//                return label(nBins_);
+//                return nBins_;
 //            }
 
             //- Return derivatives
@@ -208,15 +209,34 @@ class aggBreakup
                 scalarSquareMatrix& dfdy
             ) const;
 
-        scalarField smoluchowski(const scalarField& y);
 
-        void updateAggKernel(const label& celli);
-        void updateBreKernel(const label& celli);
+        void updateKernelsInCell(const label& celli);
 
         tmp<volScalarField> S(label clusterI) const;
 
         tmp<volScalarField> kag(label i, label j) const;
         tmp<volScalarField> kbr(label i) const;
+
+        dimensionedScalar einsteinStokes
+        (
+            const dimensionedScalar& R,
+            const dimensionedScalar& T,
+            const dimensionedScalar& mu
+        );
+
+        dimensionedScalar radiusOfGyration
+        (
+            const scalar& v,
+            const scalar& D_F,
+            const dimensionedScalar& R_p
+        );
+
+        void allocChi();
+
+        autoPtr<scalarSquareMatrix> Brownian_kernel();
+        autoPtr<scalarSquareMatrix> shear_kernelBase();
+        autoPtr<scalarField> breakup_kernelBase();
+        autoPtr<scalarSquareMatrix> fragMassDistr();
 
 public:
 

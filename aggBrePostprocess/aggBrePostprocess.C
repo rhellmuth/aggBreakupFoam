@@ -55,53 +55,60 @@ Foam::aggBrePostprocess::aggBrePostprocess
   mesh_(CMD_[0].mesh()),
   vList_(vList),
   rList_(rList),
-  isThetaFieldOn_(false),
   isAggCharTimeOn_(false),
+  isDifAggCharTime_(false),
   isBreCharTimeOn_(false),
   isAggPecletOn_(false),
-  isAvgConcentrationOn_(false),
+  isKabFieldOn_(false),
+  isAdvCharTimeOn_(false),
+  isAggDamkoehlerOn_(false),
   isZerothMomentOn_(false),
   isFirstMomentOn_(false),
   isSecondMomentOn_(false),
   isVmeanOn_(false),
   isRmeanOn_(false),
-  isAggFractionOn_(false),
-  isAdvCharTimeOn_(false),
-  isAggDamkoehlerOn_(false)
+  isPAon_(false),
+  isAvgConcentrationOn_(false)
 {
 
     // Post processing switches
     dictionary& postProcDict(aggBreakupDict_.subDict("postprocessing"));
 
-    isThetaFieldOn_  = postProcDict.lookupOrDefault("isThetaFieldOn", false);
     isAggCharTimeOn_ = postProcDict.lookupOrDefault("isAggCharTimeOn", false);
     isBreCharTimeOn_ = postProcDict.lookupOrDefault("isBreCharTimeOn", false);
+    isAdvCharTimeOn_ = postProcDict.lookupOrDefault
+    (
+        "isAdvCharTimeOn",
+        false
+    );
+    isDifAggCharTime_ = postProcDict.lookupOrDefault
+    (
+        "isDifAggCharTime",
+        false
+    );
     isAggPecletOn_   = postProcDict.lookupOrDefault("isAggPecletOn", false);
+    isAggDamkoehlerOn_ = postProcDict.lookupOrDefault
+    (
+        "isAggDamkoehlerOn",
+        false
+    );
+    isKabFieldOn_  = postProcDict.lookupOrDefault("isKabFieldOn", false);
     isAvgConcentrationOn_ = postProcDict.lookupOrDefault
-                          (
-                              "isAvgConcentrationOn",
-                              false
-                          );
+    (
+      "isAvgConcentrationOn",
+      false
+    );
     isZerothMomentOn_ = postProcDict.lookupOrDefault("isZerothMomentOn", false);
     isFirstMomentOn_ = postProcDict.lookupOrDefault("isFirstMomentOn", false);
     isSecondMomentOn_ = postProcDict.lookupOrDefault("isSecondMomentOn", false);
     isVmeanOn_ = postProcDict.lookupOrDefault("isVmeanOn", false);
     isRmeanOn_ = postProcDict.lookupOrDefault("isRmeanOn", false);
-    isAggFractionOn_ = postProcDict.lookupOrDefault("isAggFractionOn", false);
-    isAdvCharTimeOn_ = postProcDict.lookupOrDefault
-                            (
-                                "isAdvCharTimeOn", false
-                            );
-    isAggDamkoehlerOn_ = postProcDict.lookupOrDefault
-                            (
-                                "isAggDamkoehlerOn", false
-                            );
+    isPAon_ = postProcDict.lookupOrDefault("isAggFractionOn", false);
 
     if(debug)
     {
         Info << *this;
     }
-
 
     if(isZerothMomentOn_)
     {
@@ -174,7 +181,7 @@ Foam::aggBrePostprocess::aggBrePostprocess
             (
                 IOobject
                 (
-                    "vMean",
+                    "v_mean",
                     runTime_.timeName(),
                     mesh_,
                     IOobject::NO_READ,
@@ -184,7 +191,7 @@ Foam::aggBrePostprocess::aggBrePostprocess
             )
         );
 
-        Info << "Writing field vMean" << nl << endl;
+        Info << "Writing field v_mean" << nl << endl;
         vMean_->write();
     }
     if(isRmeanOn_)
@@ -195,7 +202,7 @@ Foam::aggBrePostprocess::aggBrePostprocess
             (
                 IOobject
                 (
-                    "rMean",
+                    "R_mean",
                     runTime_.timeName(),
                     mesh_,
                     IOobject::NO_READ,
@@ -205,10 +212,10 @@ Foam::aggBrePostprocess::aggBrePostprocess
             )
         );
 
-        Info << "Writing field rMean" << nl << endl;
+        Info << "Writing field R_mean" << nl << endl;
         rMean_->write();
     }
-    if(isAggFractionOn_)
+    if(isPAon_)
     {
         PA_.set
         (
@@ -232,27 +239,27 @@ Foam::aggBrePostprocess::aggBrePostprocess
 
     if(isDifAggCharTime_)
     {
-        tdif_.set
+        td_.set
         (
             new volScalarField
             (
                 IOobject
                 (
-                    "t_dif",
+                    "t_d",
                     runTime_.timeName(),
                     mesh_,
                     IOobject::NO_READ,
                     IOobject::AUTO_WRITE
                 ),
-                t_dif()
+                t_d()
             )
         );
 
-        Info << "Writing field t_dif" << nl << endl;
-        tdif_->write();
+        Info << "Writing field t_d" << nl << endl;
+        td_->write();
     }
 
-    if(isAggCharTimeOn_ || isBreCharTimeOn_ || isThetaFieldOn_)
+    if(isAggCharTimeOn_ || isBreCharTimeOn_ || isKabFieldOn_)
     {
         const volScalarField& C_0(CMD[0]);
 
@@ -261,68 +268,68 @@ Foam::aggBrePostprocess::aggBrePostprocess
         {            
             if(isAggCharTimeOn_)
             {
-                tagg_.set
+                ta_.set
                 (
                     new volScalarField
                     (
                         IOobject
                         (
-                            "t_agg",
+                            "t_a",
                             runTime_.timeName(),
                             mesh_,
                             IOobject::NO_READ,
                             IOobject::AUTO_WRITE
                         ),
-                        t_agg()
+                        t_s()
                     )
                 );
 
-                Info << "Writing field t_agg" << nl << endl;
-                tagg_->write();
+                Info << "Writing field t_a" << nl << endl;
+                ta_->write();
             }
 
             if(isBreCharTimeOn_)
             {
-                tbre_.set
+                tb_.set
                 (
                     new volScalarField
                     (
                         IOobject
                         (
-                            "t_bre",
+                            "t_b",
                             runTime_.timeName(),
                             mesh_,
                             IOobject::NO_READ,
                             IOobject::AUTO_WRITE
                         ),
-                        t_bre()
+                        t_b()
                     )
                 );
 
-                Info << "Writing field t_bre" << nl << endl;
-                tbre_->write();
+                Info << "Writing field t_b" << nl << endl;
+                tb_->write();
             }
 
-            if(isThetaFieldOn_)
+            if(isKabFieldOn_)
             {
-                theta_.set
+                Kab_.set
                 (
                     new volScalarField
                     (
                         IOobject
                         (
-                            "theta",
+                            "K_ab",
                             runTime_.timeName(),
                             mesh_,
                             IOobject::NO_READ,
                             IOobject::AUTO_WRITE
                         ),
-                        theta()
+                        K_ab()
                     )
                 );
 
-                Info << "Writing field theta" << nl << endl;
-                theta_->write();
+                Info << "Writing field K_ab" << nl << endl;
+                Kab_->write();
             }
 
         }
@@ -628,12 +635,12 @@ Foam::tmp<volScalarField> Foam::aggBrePostprocess::PA() const
     }
 }
 
-Foam::tmp<volScalarField> Foam::aggBrePostprocess::t_agg() const
+Foam::tmp<volScalarField> Foam::aggBrePostprocess::t_s() const
 {
     scalar eta(readScalar(aggBreakupDict_.lookup("eta")));
     //alpha is actually dimless but we are using dimMoles to account platelets
-    dimensionedScalar alpha("alpha", dimless/dimMoles, 4./3.);
-    const dimensionedScalar& R_mono(rList_[0]);
+    dimensionedScalar alpha("alpha", dimless/dimMoles, 32./3.);
+    const dimensionedScalar& R_p(rList_[0]);
 
     return
     (
@@ -641,7 +648,7 @@ Foam::tmp<volScalarField> Foam::aggBrePostprocess::t_agg() const
         (
             1.0 /
             (
-                eta * alpha * G() * pow(R_mono, 3.) * M_1() +
+                eta * alpha * G() * pow(R_p, 3.) * M_1() +
                 dimensionedScalar("VSMALL", dimless/dimTime, VSMALL)
             ),
             dimensionedScalar("GREAT", dimTime, GREAT)
@@ -650,7 +657,7 @@ Foam::tmp<volScalarField> Foam::aggBrePostprocess::t_agg() const
 }
 
 
-Foam::tmp<volScalarField> Foam::aggBrePostprocess::t_bre() const
+Foam::tmp<volScalarField> Foam::aggBrePostprocess::t_b() const
 {
     dimensionedScalar alin("alin", dimless/dimTime, 1.0);
     scalar b(readScalar(aggBreakupDict_.lookup("b")));
@@ -680,11 +687,11 @@ Foam::tmp<volScalarField> Foam::aggBrePostprocess::t_bre() const
 }
 
 
-Foam::tmp<volScalarField> Foam::aggBrePostprocess::theta() const
+Foam::tmp<volScalarField> Foam::aggBrePostprocess::K_ab() const
 {
     return
     (
-        t_agg() / (t_bre() + dimensionedScalar("VSMALL", dimTime, VSMALL))
+        t_b() / (t_s() + dimensionedScalar("VSMALL", dimTime, VSMALL))
     );
 }
 
@@ -724,12 +731,12 @@ Foam::tmp<volScalarField> Foam::aggBrePostprocess::Da() const
 {
     return
     (
-        t_adv() / (t_agg() + dimensionedScalar("VSMALL", dimTime, VSMALL))
+        t_adv() / (t_s() + dimensionedScalar("VSMALL", dimTime, VSMALL))
     );
 }
 
 
-Foam::tmp<volScalarField> Foam::aggBrePostprocess::t_dif() const
+Foam::tmp<volScalarField> Foam::aggBrePostprocess::t_d() const
 {
     dimensionedScalar T = aggBreakupDict_.lookup("T");
     dimensionedScalar muPlasma = aggBreakupDict_.lookup("muPlasma");
@@ -759,7 +766,7 @@ Foam::tmp<volScalarField> Foam::aggBrePostprocess::Pe() const
 {
     return
     (
-        t_dif() / (t_agg() + dimensionedScalar("VSMALL", dimTime, VSMALL))
+        t_d() / (t_s() + dimensionedScalar("VSMALL", dimTime, VSMALL))
     );
 }
 
@@ -797,9 +804,9 @@ void Foam::aggBrePostprocess::update()
             PA_() = PA();
         }
 
-        if(tdif_.valid())
+        if(td_.valid())
         {
-            tdif_() = t_dif();
+            td_() = t_d();
         }
 
         const volScalarField& C_0(CMD_[0]);
@@ -807,19 +814,19 @@ void Foam::aggBrePostprocess::update()
         // Check whether strain rate tensor is not on objectRegistry
         if(C_0.db().foundObject<volScalarField>(word("G_A")))
         {
-            if(tagg_.valid())
+            if(ta_.valid())
             {
-                tagg_() = t_agg();
+                ta_() = t_s();
             }
 
-            if(tbre_.valid())
+            if(tb_.valid())
             {
-                tbre_() = t_bre();
+                tb_() = t_b();
             }
 
-            if(theta_.valid())
+            if(Kab_.valid())
             {
-                theta_() = theta();
+                Kab_() = K_ab();
             }
 
             if(tadv_.valid())
@@ -853,9 +860,9 @@ void Foam::aggBrePostprocess::operator=(const aggBrePostprocess& rhs)
 Foam::Ostream& Foam::operator<<(Ostream& os, const aggBrePostprocess& sds)
 {
     os << endl << "Post-processing switches:" << endl;
-    os.writeKeyword("isThetaFieldOn") << sds.isThetaFieldOn_
-                                      << token::END_STATEMENT
-                                      << endl;
+    os.writeKeyword("isKabFieldOn") << sds.isKabFieldOn_
+                                    << token::END_STATEMENT
+                                    << endl;
     os.writeKeyword("isAggCharTimeOn") << sds.isAggCharTimeOn_
                                        << token::END_STATEMENT
                                        << endl;
