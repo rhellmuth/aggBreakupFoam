@@ -238,6 +238,8 @@ class aggBreakup
         autoPtr<scalarField> breakup_kernelBase();
         autoPtr<scalarSquareMatrix> fragMassDistr();
 
+        autoPtr<volScalarField> vWF_;
+
 public:
 
     ClassName("aggBreakup");

@@ -768,6 +768,23 @@ void Foam::aggBreakup::setCMD()
                 mesh_
             )
         );
+
+        vWF_.set
+        (
+            new volScalarField
+            (
+                IOobject
+                (
+                    "vWF",
+                    runTime_.timeName(),
+                    mesh_,
+                    IOobject::MUST_READ,
+                    IOobject::AUTO_WRITE
+                ),
+                mesh_,
+                dimensionedScalar("vWF", dimless/dimTime, 0.0)
+            )
+        );
     }
 }
 
@@ -856,24 +873,57 @@ void Foam::aggBreakup::update()
     if(isActivationOn_)
     {
         //solve transport of resting platelets
-        fvScalarMatrix massTransport
-        (
-            fvm::ddt(Crp_())
-          + fvm::div(phi_, Crp_(), "div(phi,C_*)")
-          - fvm::laplacian(Dlist_[0], Crp_(), "laplacian(D,C_*)")
-        );
-        massTransport.solve(mesh_.solver("C_*"));
-
-        //activate platelets
-        forAll(GA_->internalField(),i)
+        if(isSorensenianAggOn_)
         {
-            if(GA_->internalField()[i] >= activThreshold_)
+            //activate platelets
+            forAll(GA_->internalField(),i)
             {
-                // C_RP -> C_1
-                CMD_[0].internalField()[i] += max(Crp_->internalField()[i], 0.0);
-                // C_RP = 0
-                Crp_->internalField()[i] = 0.0;
+                if(GA_->internalField()[i] >= activThreshold_)
+                {
+                    // C_RP -> C_1
+//                    CMD_[0].internalField()[i] += max(Crp_->internalField()[i], 0.0);
+//                    // C_RP = 0
+//                    Crp_->internalField()[i] = 0.0;
+                    vWF_->internalField()[i] = 2e4;
+                }
             }
+
+            volScalarField D
+            (
+                IOobject
+                (
+                    "D",
+                    runTime_.timeName(),
+                    mesh_
+                ),
+                mesh_,
+                Dlist_[0]
+            );
+            D.internalField() += 1.05 * D.internalField() * GA_->internalField();
+            fvScalarMatrix massTransport
+            (
+                fvm::ddt(Crp_())
+              + fvm::div(phi_, Crp_(), "div(phi,C_*)")
+              - fvm::laplacian
+                (
+                    D,
+                    Crp_(),
+                    "laplacian(D,C_*)"
+                )
+              ==
+              - fvc::Sp(vWF_(),Crp_())
+            );
+            massTransport.solve(mesh_.solver("C_*"));
+        }
+        else
+        {
+            fvScalarMatrix massTransport
+            (
+                fvm::ddt(Crp_())
+              + fvm::div(phi_, Crp_(), "div(phi,C_*)")
+              - fvm::laplacian(Dlist_[0], Crp_(), "laplacian(D,C_*)")
+            );
+            massTransport.solve(mesh_.solver("C_*"));
         }
     }
 
@@ -910,13 +960,58 @@ void Foam::aggBreakup::update()
         {
             volScalarField& Ci = CMD_[i];
             dimensionedScalar& Di = Dlist_[i];
-            fvScalarMatrix massTransport
-            (
-                fvm::ddt(Ci)
-              + fvm::div(phi_, Ci, "div(phi,C_*)")
-              - fvm::laplacian(Di, Ci, "laplacian(D,C_*)")
-            );
-            massTransport.solve(mesh_.solver("C_*"));
+
+            //solve transport of resting platelets
+            if(isSorensenianAggOn_)
+            {
+                volScalarField D
+                (
+                    IOobject
+                    (
+                        "D",
+                        runTime_.timeName(),
+                        mesh_
+                    ),
+                    mesh_,
+                    Di
+                );
+                D.internalField() += 1.05 * D.internalField() * GA_->internalField();
+                if(i==0)
+                {
+                    fvScalarMatrix massTransport
+                    (
+                        fvm::ddt(Ci)
+                      + fvm::div(phi_, Ci, "div(phi,C_*)")
+                      - fvm::laplacian(D, Ci, "laplacian(D,C_*)")
+                    ==
+                        fvc::Sp(vWF_(),Crp_().oldTime())
+                    );
+                    massTransport.solve(mesh_.solver("C_*"));
+
+                }
+                else
+                {
+                    fvScalarMatrix massTransport
+                    (
+                        fvm::ddt(Ci)
+                      + fvm::div(phi_, Ci, "div(phi,C_*)")
+                      - fvm::laplacian(D, Ci, "laplacian(D,C_*)")
+                    );
+                    massTransport.solve(mesh_.solver("C_*"));
+                }
+
+            }
+            else
+            {
+                fvScalarMatrix massTransport
+                (
+                    fvm::ddt(Ci)
+                  + fvm::div(phi_, Ci, "div(phi,C_*)")
+                  - fvm::laplacian(Di, Ci, "laplacian(D,C_*)")
+                );
+                massTransport.solve(mesh_.solver("C_*"));
+            }
+
         }
 
         solveAggBreakup();
@@ -1132,6 +1227,10 @@ Foam::tmp<volScalarField> Foam::aggBreakup::kag(label i, label j) const
     if(isBrowninanAggOn_)
     {
         k->internalField() += kdBase_()[i][j];
+        if(isSorensenianAggOn_)
+        {
+            k->internalField() += 1.05 * GA_() * kdBase_()[i][j];
+        }
     }
     if(isShearAggOn_)
     {
