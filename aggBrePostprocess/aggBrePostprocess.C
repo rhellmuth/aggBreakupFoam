@@ -67,6 +67,7 @@ Foam::aggBrePostprocess::aggBrePostprocess
   isSecondMomentOn_(false),
   isVmeanOn_(false),
   isRmeanOn_(false),
+  isI0On_(false),
   isPAon_(false),
   isAvgConcentrationOn_(false)
 {
@@ -103,6 +104,7 @@ Foam::aggBrePostprocess::aggBrePostprocess
     isSecondMomentOn_ = postProcDict.lookupOrDefault("isSecondMomentOn", false);
     isVmeanOn_ = postProcDict.lookupOrDefault("isVmeanOn", false);
     isRmeanOn_ = postProcDict.lookupOrDefault("isRmeanOn", false);
+    isI0On_ = postProcDict.lookupOrDefault("isI0On", false);
     isPAon_ = postProcDict.lookupOrDefault("isAggFractionOn", false);
 
     if(debug)
@@ -214,6 +216,27 @@ Foam::aggBrePostprocess::aggBrePostprocess
 
         Info << "Writing field R_mean" << nl << endl;
         rMean_->write();
+    }
+    if(isI0On_)
+    {
+        I0_.set
+        (
+            new volScalarField
+            (
+                IOobject
+                (
+                    "I0",
+                    runTime_.timeName(),
+                    mesh_,
+                    IOobject::NO_READ,
+                    IOobject::AUTO_WRITE
+                ),
+                I0()
+            )
+        );
+
+        Info << "Writing field R_mean" << nl << endl;
+        I0_->write();
     }
     if(isPAon_)
     {
@@ -592,6 +615,13 @@ Foam::tmp<volScalarField> Foam::aggBrePostprocess::rMean() const
     );
 }
 
+Foam::tmp<volScalarField> Foam::aggBrePostprocess::I0() const
+{
+    return
+    (
+        M_2() / (M_1() + dimensionedScalar("VSMALL", dimMoles/dimVolume, VSMALL))
+    );
+}
 
 Foam::tmp<volScalarField> Foam::aggBrePostprocess::PA() const
 {
@@ -797,6 +827,11 @@ void Foam::aggBrePostprocess::update()
         if(rMean_.valid())
         {
             rMean_() = rMean();
+        }
+
+        if(I0_.valid())
+        {
+            I0_() = I0();
         }
 
         if(PA_.valid())

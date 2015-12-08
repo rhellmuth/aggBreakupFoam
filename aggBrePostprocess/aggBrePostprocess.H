@@ -87,6 +87,7 @@ class aggBrePostprocess
         bool isSecondMomentOn_;
         bool isVmeanOn_;
         bool isRmeanOn_;
+        bool isI0On_;
         bool isPAon_;
         bool isAvgConcentrationOn_;
 
@@ -126,6 +127,9 @@ class aggBrePostprocess
 
         //-Aggregates mean radius of gyration
         autoPtr<volScalarField> rMean_;
+
+        //-Zero angle intensity
+        autoPtr<volScalarField> I0_;
 
         //-Aggregation fraction in %
         autoPtr<volScalarField> PA_;
@@ -181,6 +185,7 @@ public:
         tmp<volScalarField> M_2() const;
         tmp<volScalarField> vMean() const;
         tmp<volScalarField> rMean() const;
+        tmp<volScalarField> I0() const;
         tmp<volScalarField> t_s() const;
         tmp<volScalarField> t_b() const;
         tmp<volScalarField> K_ab() const;
