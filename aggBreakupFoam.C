@@ -99,7 +99,7 @@ int main(int argc, char *argv[])
 //            }
 
 
-//            #include "continuityErrs.H"
+            #include "continuityErrs.H"
 
 //            U = HbyA - rAU*fvc::grad(p);
 //            U.correctBoundaryConditions();

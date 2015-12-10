@@ -396,7 +396,7 @@ Foam::autoPtr<scalarField> Foam::aggBreakup::breakup_kernelBase()
 
     if(a_.value() != 1.0)
     {
-        Info << "In the dictionary " << aggBreakupDict_->name()
+        Info << "In the dictionary " << name()
              << " the breakup constant \'a != 1 s^-1\' was given."
              << " Calculating new Gstar from a, b, c, and R_p." << endl;
         Gstar_.value() = pow
@@ -483,6 +483,17 @@ Foam::aggBreakup::aggBreakup
 )
 :
     ODESystem(),
+    IOdictionary
+    (
+        IOobject
+        (
+            "aggBreakupProperties",
+            U.time().constant(),
+            U.db(),
+            IOobject::MUST_READ,
+            IOobject::NO_WRITE
+        )
+    ),
     U_(U),
     phi_(phi),
     mesh_(U_.mesh()),
@@ -493,7 +504,7 @@ Foam::aggBreakup::aggBreakup
     a_(dimensionedScalar("a", dimless/dimTime, 1.0)),
     Gstar_(dimensionedScalar("Gstar", dimless/dimTime, 1000.0))
 {
-    readDict("aggBreakupProperties");
+    readDict();
     setCMD();
     setPBE();
 
@@ -501,7 +512,7 @@ Foam::aggBreakup::aggBreakup
     (
         new aggBrePostprocess
         (
-            aggBreakupDict_,
+            this,
             CMD_,
             vList_,
             Rlist_
@@ -552,26 +563,11 @@ Foam::aggBreakup::~aggBreakup()
 // * * * * * * * * * * * * * * Member Functions  * * * * * * * * * * * * * * //
 
 
-void Foam::aggBreakup::readDict(string dictName)
+void Foam::aggBreakup::readDict()
 {
-    Info << "Reading " << dictName << nl << endl;
+    Info << "Reading " << this->dictName() << nl << endl;
 
-    aggBreakupDict_.set
-    (
-        new IOdictionary
-        (
-            IOobject
-            (
-                dictName,
-                runTime_.constant(),
-                runTime_.time(),
-                IOobject::MUST_READ,
-                IOobject::NO_WRITE
-            )
-        )
-    );
-
-    isPBEcoupled_ = readBool(aggBreakupDict_->lookup("isPBEcoupled"));
+    isPBEcoupled_ = readBool(lookup("isPBEcoupled"));
 
     if(!isPBEcoupled_)
     {
@@ -579,30 +575,30 @@ void Foam::aggBreakup::readDict(string dictName)
         solver_ =  ODESolver::New
         (
             *this,
-            aggBreakupDict_->subDict("odeSolver")
+            subDict("odeSolver")
         );
     }
 
-    isGridUniform_ = readBool(aggBreakupDict_->lookup("isGridUniform"));
-    nBins_ = readLabel( aggBreakupDict_->lookup("nBins") );
-    Rp_ = aggBreakupDict_->lookup("Rmono");
-    DF_ = readScalar(aggBreakupDict_->lookup("DF"));
+    isGridUniform_ = readBool(lookup("isGridUniform"));
+    nBins_ = readLabel(lookup("nBins") );
+    Rp_ = lookup("Rmono");
+    DF_ = readScalar(lookup("DF"));
 
-    isBrowninanAggOn_ = readBool(aggBreakupDict_->lookup("isBrowninanAggOn"));
-    isShearAggOn_ = readBool(aggBreakupDict_->lookup("isShearAggOn"));
-    isSorensenianAggOn_ = readBool(aggBreakupDict_->lookup("isSorensenianAggOn"));
-    eta_ = readScalar( aggBreakupDict_->lookup("eta") );
-    T_ = aggBreakupDict_->lookup("T");
-    muPlasma_ = aggBreakupDict_->lookup("muPlasma");
+    isBrowninanAggOn_ = readBool(lookup("isBrowninanAggOn"));
+    isShearAggOn_ = readBool(lookup("isShearAggOn"));
+    isSorensenianAggOn_ = readBool(lookup("isSorensenianAggOn"));
+    eta_ = readScalar( lookup("eta") );
+    T_ = lookup("T");
+    muPlasma_ = lookup("muPlasma");
 
-    isBreakupOn_ = readBool(aggBreakupDict_->lookup("isBreakupOn"));
-//    a_ = aggBreakupDict_->lookup("a");
-    Gstar_ = aggBreakupDict_->lookup("Gstar");
-    b_ = readScalar(aggBreakupDict_->lookup("b"));
-    c_ = readScalar(aggBreakupDict_->lookup("c"));
+    isBreakupOn_ = readBool(lookup("isBreakupOn"));
+//    a_ = lookup("a");
+    Gstar_ = lookup("Gstar");
+    b_ = readScalar(lookup("b"));
+    c_ = readScalar(lookup("c"));
 
-    isActivationOn_ = readBool(aggBreakupDict_->lookup("isActivationOn"));
-    activThreshold_ = readScalar(aggBreakupDict_->lookup("activThreshold"));
+    isActivationOn_ = readBool(lookup("isActivationOn"));
+    activThreshold_ = readScalar(lookup("activThreshold"));
 
 }
 
@@ -1034,7 +1030,7 @@ void Foam::aggBreakup::solveAggBreakup()
 {
     scalar subDeltaT = readScalar
     (
-        aggBreakupDict_->subDict("odeSolver").lookup("subDeltaT")
+        subDict("odeSolver").lookup("subDeltaT")
     );
 
     Info << "Solving PBE" << tab

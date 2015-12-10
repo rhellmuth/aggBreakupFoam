@@ -43,7 +43,7 @@ SourceFiles
 #include "ODESystem.H"
 #include "ODESolver.H"
 
-#include "../aggBrePostprocess/aggBrePostprocess.H"
+#include "aggBrePostprocess/aggBrePostprocess.H"
 
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 
@@ -64,7 +64,8 @@ namespace Foam
 
 class aggBreakup
 :
-    private ODESystem
+    private ODESystem,
+    public IOdictionary
 {
     // Private data
 
@@ -85,8 +86,6 @@ class aggBreakup
         // CMD discretization scheme data
 
             bool isPBEcoupled_;
-
-            autoPtr<IOdictionary> aggBreakupDict_;
 
             //-Specify the bin structure you want to use
             // * True => use a linear bin structure and solve the PBE in
@@ -276,7 +275,7 @@ public:
 
         // Access
 
-        void readDict(string dictName);
+        void readDict();
 
         void setCMD();
 
