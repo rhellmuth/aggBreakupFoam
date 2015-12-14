@@ -35,12 +35,6 @@ namespace Foam
 
 // * * * * * * * * * * * * * Private Member Functions  * * * * * * * * * * * //
 
-label Foam::aggBreakup::nEqns() const
-{
-    return 12;
-}
-
-
 void Foam::aggBreakup::derivatives
 (
     const scalar x,
@@ -132,7 +126,7 @@ void Foam::aggBreakup::jacobian
 
 void Foam::aggBreakup::updateKernelsInCell(const label& celli)
 {
-    const scalar& G = GA_()[celli];
+    const scalar& G = G_()[celli];
 
     if(isShearAggOn_ || isBrowninanAggOn_ || isSorensenianAggOn_)
     {
@@ -498,6 +492,7 @@ Foam::aggBreakup::aggBreakup
     phi_(phi),
     mesh_(U_.mesh()),
     runTime_(U_.time()),
+    nBins_(readLabel(lookup("nBins"))),
     Rp_(dimensionedScalar("Rmono", dimLength, 0.0)),
     T_(dimensionedScalar("T", dimTemperature, 300.0)),
     muPlasma_(dimensionedScalar("mu", dimMass/dimLength/dimTime, 3.5e-03)),
@@ -580,7 +575,7 @@ void Foam::aggBreakup::readDict()
     }
 
     isGridUniform_ = readBool(lookup("isGridUniform"));
-    nBins_ = readLabel(lookup("nBins") );
+
     Rp_ = lookup("Rmono");
     DF_ = readScalar(lookup("DF"));
 
@@ -791,13 +786,13 @@ void Foam::aggBreakup::setPBE()
     // According to Pedocchi & Piedra-Cueva (2005) the aggregation kernel in general flow
     // depends on the absolute velocity gradient, as had been previously formulated by
     // Camp & Stein (1943).
-    GA_.set
+    G_.set
     (
         new volScalarField
         (
             IOobject
             (
-                "G_A",
+                "G",
                 runTime_.timeName(),
                 mesh_,
                 IOobject::NO_READ,
@@ -807,8 +802,8 @@ void Foam::aggBreakup::setPBE()
         )
     );
 
-    Info << "Writing field G_A" << nl << endl;
-    GA_->write();
+    Info << "Writing field " << G_->name() << nl << endl;
+    G_->write();
 
     // Calculate the interpolation operator on the non-uniform grid
     if(!isGridUniform_)
@@ -863,7 +858,7 @@ void Foam::aggBreakup::update()
     if(isShearAggOn_)
     {
         // update the absolute velocity gradient field
-        GA_() = sqrt(2.0) * mag(symm( fvc::grad(U_)() ));
+        G_() = sqrt(2.0) * mag(symm( fvc::grad(U_)() ));
     }
 
     if(isActivationOn_)
@@ -872,9 +867,9 @@ void Foam::aggBreakup::update()
         if(isSorensenianAggOn_)
         {
             //activate platelets
-            forAll(GA_->internalField(),i)
+            forAll(G_->internalField(),i)
             {
-                if(GA_->internalField()[i] >= activThreshold_)
+                if(G_->internalField()[i] >= activThreshold_)
                 {
                     // C_RP -> C_1
 //                    CMD_[0].internalField()[i] += max(Crp_->internalField()[i], 0.0);
@@ -895,7 +890,7 @@ void Foam::aggBreakup::update()
                 mesh_,
                 Dlist_[0]
             );
-            D.internalField() += 1.05 * D.internalField() * GA_->internalField();
+            D.internalField() += 1.05 * D.internalField() * G_->internalField();
             fvScalarMatrix massTransport
             (
                 fvm::ddt(Crp_())
@@ -971,7 +966,7 @@ void Foam::aggBreakup::update()
                     mesh_,
                     Di
                 );
-                D.internalField() += 1.05 * D.internalField() * GA_->internalField();
+                D.internalField() += 1.05 * D.internalField() * G_->internalField();
                 if(i==0)
                 {
                     fvScalarMatrix massTransport
@@ -1225,12 +1220,12 @@ Foam::tmp<volScalarField> Foam::aggBreakup::kag(label i, label j) const
         k->internalField() += kdBase_()[i][j];
         if(isSorensenianAggOn_)
         {
-            k->internalField() += 1.05 * GA_() * kdBase_()[i][j];
+            k->internalField() += 1.05 * G_() * kdBase_()[i][j];
         }
     }
     if(isShearAggOn_)
     {
-        k->internalField() += GA_() * ksBase_()[i][j];
+        k->internalField() += G_() * ksBase_()[i][j];
     }
 
     return k;
@@ -1250,7 +1245,7 @@ Foam::tmp<volScalarField> Foam::aggBreakup::kbr(label i) const
                 runTime_.timeName(),
                 mesh_
             ),
-            alin * pow(GA_() / Gstar_, b_) * kbBase_()[i]
+            alin * pow(G_() / Gstar_, b_) * kbBase_()[i]
         )
     );
 

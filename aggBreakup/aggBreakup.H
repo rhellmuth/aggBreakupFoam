@@ -81,7 +81,7 @@ class aggBreakup
         PtrList<volScalarField> CMDold_;
 
         //-Absolute velocity gradient
-        autoPtr<volScalarField> GA_;
+        autoPtr<volScalarField> G_;
 
         // CMD discretization scheme data
 
@@ -186,10 +186,10 @@ class aggBreakup
         // ODE parameters
 
             //- Return number of equations
-            virtual label nEqns() const;
-//            {
-//                return nBins_;
-//            }
+            virtual label nEqns() const
+            {
+                return nBins_;
+            }
 
             //- Return derivatives
             virtual void derivatives

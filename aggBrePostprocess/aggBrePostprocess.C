@@ -287,7 +287,7 @@ Foam::aggBrePostprocess::aggBrePostprocess
         const volScalarField& C_0(CMD[0]);
 
         // Check whether strain rate tensor is not on objectRegistry
-        if(C_0.db().foundObject<volScalarField>(word("G_A")))
+        if(C_0.db().foundObject<volScalarField>(word("G")))
         {            
             if(isAggCharTimeOn_)
             {
@@ -359,8 +359,8 @@ Foam::aggBrePostprocess::aggBrePostprocess
         else
         {
             WarningIn("Foam::aggBreakupPostprocess::aggBreakupPostprocess")
-                << "Characteristic times dependent on absolute shear rate (G_A) "
-                << "cannot be calculated because G_A is not defined on the "
+                << "Characteristic times dependent on absolute shear rate (G) "
+                << "cannot be calculated because G is not defined on the "
                 << "objectRegistry"
                 << nl << endl;
         }
@@ -467,7 +467,7 @@ Foam::tmp<volScalarField> Foam::aggBrePostprocess::G() const
     // update shear rate
     const volScalarField& C_0(CMD_[0]);
 
-    const volScalarField& G(C_0.db().lookupObject<volScalarField>(word("G_A")));
+    const volScalarField& G(C_0.db().lookupObject<volScalarField>(word("G")));
     return G;
 }
 
@@ -847,7 +847,7 @@ void Foam::aggBrePostprocess::update()
         const volScalarField& C_0(CMD_[0]);
 
         // Check whether strain rate tensor is not on objectRegistry
-        if(C_0.db().foundObject<volScalarField>(word("G_A")))
+        if(C_0.db().foundObject<volScalarField>(word("G")))
         {
             if(ta_.valid())
             {
