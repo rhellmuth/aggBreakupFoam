@@ -126,7 +126,7 @@ Foam::aggBrePostprocess::aggBrePostprocess
                     IOobject::NO_READ,
                     IOobject::AUTO_WRITE
                 ),
-                M_0()
+                moment(0.0)
             )
         );
 
@@ -147,7 +147,7 @@ Foam::aggBrePostprocess::aggBrePostprocess
                     IOobject::NO_READ,
                     IOobject::AUTO_WRITE
                 ),
-                M_1()
+                moment(1.0)
             )
         );
 
@@ -168,7 +168,7 @@ Foam::aggBrePostprocess::aggBrePostprocess
                     IOobject::NO_READ,
                     IOobject::AUTO_WRITE
                 ),
-                M_2()
+                moment(2.0)
             )
         );
 
@@ -472,7 +472,8 @@ Foam::tmp<volScalarField> Foam::aggBrePostprocess::G() const
 }
 
 
-Foam::tmp<volScalarField> Foam::aggBrePostprocess::M_0() const
+
+Foam::tmp<volScalarField> Foam::aggBrePostprocess::moment(scalar order) const
 {
     tmp<volScalarField> output
     (
@@ -499,73 +500,7 @@ Foam::tmp<volScalarField> Foam::aggBrePostprocess::M_0() const
 
     forAll(CMD_, i)
     {
-        output() += CMD_[i];
-    }
-
-    return output;
-}
-
-Foam::tmp<volScalarField> Foam::aggBrePostprocess::M_1() const
-{
-    tmp<volScalarField> output
-    (
-        new volScalarField
-        (
-            IOobject
-            (
-                "summation",
-                runTime_.timeName(),
-                mesh_
-            ),
-            mesh_,
-            dimensionedScalar("summation", dimMoles/dimVolume, 0.0)
-        )
-    );
-
-    bool isActivationOn = readBool(aggBreakupDict_.lookup("isActivationOn"));
-    if(isActivationOn)
-    {
-        const volScalarField& C_0(CMD_[0]);
-        const volScalarField& Crp(C_0.db().lookupObject<volScalarField>(word("C_RP")));
-        output() += Crp;
-    }
-
-    forAll(CMD_, i)
-    {
-        output() += CMD_[i] * vList_[i];
-    }
-    return output;
-}
-
-
-Foam::tmp<volScalarField> Foam::aggBrePostprocess::M_2() const
-{
-    tmp<volScalarField> output
-    (
-        new volScalarField
-        (
-            IOobject
-            (
-                "summation",
-                runTime_.timeName(),
-                mesh_
-            ),
-            mesh_,
-            dimensionedScalar("summation", dimMoles/dimVolume, 0.0)
-        )
-    );
-
-    bool isActivationOn = readBool(aggBreakupDict_.lookup("isActivationOn"));
-    if(isActivationOn)
-    {
-        const volScalarField& C_0(CMD_[0]);
-        const volScalarField& Crp(C_0.db().lookupObject<volScalarField>(word("C_RP")));
-        output() += Crp;
-    }
-
-    forAll(CMD_, i)
-    {
-        output() += CMD_[i] * pow(vList_[i], 2.0);
+        output() += CMD_[i] * pow(vList_[i], order);
     }
 
     return output;
@@ -575,7 +510,7 @@ Foam::tmp<volScalarField> Foam::aggBrePostprocess::vMean() const
 {
     return
     (
-        M_1() / (M_0() + dimensionedScalar("VSMALL", dimMoles/dimVolume, VSMALL))
+        moment(1.0) / (moment(0.0) + dimensionedScalar("VSMALL", dimMoles/dimVolume, VSMALL))
     );
 }
 
@@ -611,7 +546,7 @@ Foam::tmp<volScalarField> Foam::aggBrePostprocess::rMean() const
 
     return
     (
-        RiCi() / (M_0() + dimensionedScalar("VSMALL", dimMoles/dimVolume, VSMALL))
+        RiCi() / (moment(0.0) + dimensionedScalar("VSMALL", dimMoles/dimVolume, VSMALL))
     );
 }
 
@@ -619,7 +554,7 @@ Foam::tmp<volScalarField> Foam::aggBrePostprocess::I0() const
 {
     return
     (
-        M_2() / (M_1() + dimensionedScalar("VSMALL", dimMoles/dimVolume, VSMALL))
+        moment(2.0) / (moment(1.0) + dimensionedScalar("VSMALL", dimMoles/dimVolume, VSMALL))
     );
 }
 
@@ -639,7 +574,7 @@ Foam::tmp<volScalarField> Foam::aggBrePostprocess::PA() const
                 (
                     (CMD_[0] + Crp) /
                     (
-                        M_1() +
+                        moment(1.0) +
                         dimensionedScalar("VSMALL", dimMoles / dimVolume, VSMALL)
                     )
                 )
@@ -656,7 +591,7 @@ Foam::tmp<volScalarField> Foam::aggBrePostprocess::PA() const
                 (
                     CMD_[0] /
                     (
-                        M_1() +
+                        moment(1.0) +
                         dimensionedScalar("VSMALL", dimMoles / dimVolume, VSMALL)
                     )
                 )
@@ -678,7 +613,7 @@ Foam::tmp<volScalarField> Foam::aggBrePostprocess::t_s() const
         (
             1.0 /
             (
-                eta * alpha * G() * pow(R_p, 3.) * M_1() +
+                eta * alpha * G() * pow(R_p, 3.) * moment(1.0) +
                 dimensionedScalar("VSMALL", dimless/dimTime, VSMALL)
             ),
             dimensionedScalar("GREAT", dimTime, GREAT)
@@ -784,7 +719,7 @@ Foam::tmp<volScalarField> Foam::aggBrePostprocess::t_d() const
             // substance) to account platelets
             dimensionedScalar("one", dimMoles, 1.0) /
             (
-                4.0 * M_PI * (2.0 * R_mono) * (2.0 * D_mono) * M_1() +
+                4.0 * M_PI * (2.0 * R_mono) * (2.0 * D_mono) * moment(1.0) +
                 dimensionedScalar("VSMALL", dimMoles/dimTime, VSMALL)
             ),
             dimensionedScalar("GREAT", dimTime, GREAT)
@@ -806,17 +741,17 @@ void Foam::aggBrePostprocess::update()
     {
         if(M0_.valid())
         {
-            M0_() = M_0();
+            M0_() = moment(0.0);
         }
 
         if(M1_.valid())
         {
-            M1_() = M_1();
+            M1_() = moment(1.0);
         }
 
         if(M2_.valid())
         {
-            M2_() = M_2();
+            M2_() = moment(2.0);
         }
 
         if(vMean_.valid())

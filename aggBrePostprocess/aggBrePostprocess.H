@@ -180,9 +180,7 @@ public:
 
         // Edit
         tmp<volScalarField> G() const;
-        tmp<volScalarField> M_0() const;
-        tmp<volScalarField> M_1() const;
-        tmp<volScalarField> M_2() const;
+        tmp<volScalarField> moment(scalar order) const;
         tmp<volScalarField> vMean() const;
         tmp<volScalarField> rMean() const;
         tmp<volScalarField> I0() const;

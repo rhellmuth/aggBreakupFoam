@@ -144,9 +144,10 @@ void Foam::aggBreakup::updateKernelsInCell(const label& celli)
                 if(isBrowninanAggOn_ || isSorensenianAggOn_)
                 {
                     kc_()[i][j] += kdBase_()[i][j];
+
                     if(isSorensenianAggOn_)
                     {
-                        kc_()[i][j] += 1.05 * G * kdBase_()[i][j];
+                        kc_()[i][j] += 1.05 * G * kdBase_()[i][j]; //Sorensen EDM
                     }
                 }
             }
@@ -328,7 +329,7 @@ Foam::autoPtr<scalarSquareMatrix> Foam::aggBreakup::shear_kernelBase()
             {
                 ksBase()[i][j] =
                 (
-                    (32.0/3.0) * pow
+                    (4.0/3.0) * pow
                     (
                         Rlist_[i].value() + Rlist_[j].value(),
                         3.0
@@ -493,7 +494,7 @@ Foam::aggBreakup::aggBreakup
     mesh_(U_.mesh()),
     runTime_(U_.time()),
     nBins_(readLabel(lookup("nBins"))),
-    Rp_(dimensionedScalar("Rmono", dimLength, 0.0)),
+    Rp_(dimensionedScalar("Rp", dimLength, 0.0)),
     T_(dimensionedScalar("T", dimTemperature, 300.0)),
     muPlasma_(dimensionedScalar("mu", dimMass/dimLength/dimTime, 3.5e-03)),
     a_(dimensionedScalar("a", dimless/dimTime, 1.0)),
@@ -576,7 +577,7 @@ void Foam::aggBreakup::readDict()
 
     isGridUniform_ = readBool(lookup("isGridUniform"));
 
-    Rp_ = lookup("Rmono");
+    Rp_ = lookup("Rp");
     DF_ = readScalar(lookup("DF"));
 
     isBrowninanAggOn_ = readBool(lookup("isBrowninanAggOn"));
@@ -1278,7 +1279,7 @@ Foam::Ostream& Foam::operator<<(Ostream& os, const aggBreakup& sds)
     os.writeKeyword("nBins") << sds.nBins_
                              << token::END_STATEMENT
                              << endl;
-    os.writeKeyword("Rmono") << sds.Rp_
+    os.writeKeyword("Rp") << sds.Rp_
                              << token::END_STATEMENT
                              << endl;
     os.writeKeyword("DF") << sds.DF_
