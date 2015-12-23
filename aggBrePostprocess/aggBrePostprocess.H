@@ -59,6 +59,8 @@ namespace Foam
 \*---------------------------------------------------------------------------*/
 
 class aggBrePostprocess
+:
+    public dictionary
 {
     // Private data
 
@@ -75,21 +77,20 @@ class aggBrePostprocess
         const PtrList<dimensionedScalar>& rList_;
 
         //- Swiches
-        bool isAggCharTimeOn_;
-        bool isDifAggCharTime_;
-        bool isBreCharTimeOn_;
-        bool isAggPecletOn_;
-        bool isKabFieldOn_;
-        bool isAdvCharTimeOn_;
-        bool isAggDamkoehlerOn_;
-        bool isZerothMomentOn_;
-        bool isFirstMomentOn_;
-        bool isSecondMomentOn_;
-        bool isVmeanOn_;
-        bool isRmeanOn_;
-        bool isI0On_;
-        bool isPAon_;
-        bool isAvgConcentrationOn_;
+        Switch isShearAggCharTimeOn_;
+        Switch isDifAggCharTimeOn_;
+        Switch isBreCharTimeOn_;
+        Switch isAggPecletOn_;
+        Switch isKabFieldOn_;
+        Switch isAdvCharTimeOn_;
+        Switch isAggDamkoehlerOn_;
+        Switch isZerothMomentOn_;
+        Switch isFirstMomentOn_;
+        Switch isSecondMomentOn_;
+        Switch isVmeanOn_;
+        Switch isRmeanOn_;
+        Switch isI0On_;
+        Switch isPAon_;
 
 
         //-Aggregation characteristic time field
@@ -156,7 +157,7 @@ public:
         //- Construct from dictionary
         aggBrePostprocess
         (
-                const dictionary& aggBreakupDict,
+                const dictionary& postProcDict,
                 const PtrList<volScalarField>& CMD,
                 const PtrList<scalar>& vList,
                 const PtrList<dimensionedScalar>& rList

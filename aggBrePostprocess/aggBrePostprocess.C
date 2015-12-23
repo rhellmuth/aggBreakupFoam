@@ -49,63 +49,28 @@ Foam::aggBrePostprocess::aggBrePostprocess
     const PtrList<dimensionedScalar>& rList
 )
 :
-  aggBreakupDict_(aggBreakupDict),
-  CMD_(CMD),
-  runTime_(CMD_[0].time()),
-  mesh_(CMD_[0].mesh()),
-  vList_(vList),
-  rList_(rList),
-  isAggCharTimeOn_(false),
-  isDifAggCharTime_(false),
-  isBreCharTimeOn_(false),
-  isAggPecletOn_(false),
-  isKabFieldOn_(false),
-  isAdvCharTimeOn_(false),
-  isAggDamkoehlerOn_(false),
-  isZerothMomentOn_(false),
-  isFirstMomentOn_(false),
-  isSecondMomentOn_(false),
-  isVmeanOn_(false),
-  isRmeanOn_(false),
-  isI0On_(false),
-  isPAon_(false),
-  isAvgConcentrationOn_(false)
+    dictionary(aggBreakupDict.subDict("writeFields")),
+    aggBreakupDict_(aggBreakupDict),
+    CMD_(CMD),
+    runTime_(CMD_[0].time()),
+    mesh_(CMD_[0].mesh()),
+    vList_(vList),
+    rList_(rList),
+    isShearAggCharTimeOn_(lookupOrDefault<Switch>("t_s", false)),
+    isDifAggCharTimeOn_(lookupOrDefault<Switch>("t_d", false)),
+    isBreCharTimeOn_(lookupOrDefault<Switch>("t_b", false)),
+    isAggPecletOn_(lookupOrDefault<Switch>("Pe", false)),
+    isKabFieldOn_(lookupOrDefault<Switch>("K_ab", false)),
+    isAdvCharTimeOn_(lookupOrDefault<Switch>("t_adv", false)),
+    isAggDamkoehlerOn_(lookupOrDefault<Switch>("Da", false)),
+    isZerothMomentOn_(lookupOrDefault<Switch>("M_0", false)),
+    isFirstMomentOn_(lookupOrDefault<Switch>("M_1", false)),
+    isSecondMomentOn_(lookupOrDefault<Switch>("M_2", false)),
+    isVmeanOn_(lookupOrDefault<Switch>("v_mean", false)),
+    isRmeanOn_(lookupOrDefault<Switch>("R_mean", false)),
+    isI0On_(lookupOrDefault<Switch>("I0", false)),
+    isPAon_(lookupOrDefault<Switch>("PA", false))
 {
-
-    // Post processing switches
-    dictionary& postProcDict(aggBreakupDict_.subDict("postprocessing"));
-
-    isAggCharTimeOn_ = postProcDict.lookupOrDefault("isAggCharTimeOn", false);
-    isBreCharTimeOn_ = postProcDict.lookupOrDefault("isBreCharTimeOn", false);
-    isAdvCharTimeOn_ = postProcDict.lookupOrDefault
-    (
-        "isAdvCharTimeOn",
-        false
-    );
-    isDifAggCharTime_ = postProcDict.lookupOrDefault
-    (
-        "isDifAggCharTime",
-        false
-    );
-    isAggPecletOn_   = postProcDict.lookupOrDefault("isAggPecletOn", false);
-    isAggDamkoehlerOn_ = postProcDict.lookupOrDefault
-    (
-        "isAggDamkoehlerOn",
-        false
-    );
-    isKabFieldOn_  = postProcDict.lookupOrDefault("isKabFieldOn", false);
-    isAvgConcentrationOn_ = postProcDict.lookupOrDefault
-    (
-      "isAvgConcentrationOn",
-      false
-    );
-    isZerothMomentOn_ = postProcDict.lookupOrDefault("isZerothMomentOn", false);
-    isFirstMomentOn_ = postProcDict.lookupOrDefault("isFirstMomentOn", false);
-    isSecondMomentOn_ = postProcDict.lookupOrDefault("isSecondMomentOn", false);
-    isVmeanOn_ = postProcDict.lookupOrDefault("isVmeanOn", false);
-    isRmeanOn_ = postProcDict.lookupOrDefault("isRmeanOn", false);
-    isI0On_ = postProcDict.lookupOrDefault("isI0On", false);
-    isPAon_ = postProcDict.lookupOrDefault("isAggFractionOn", false);
 
     if(debug)
     {
@@ -130,7 +95,8 @@ Foam::aggBrePostprocess::aggBrePostprocess
             )
         );
 
-        Info << "Writing field M_0" << nl << endl;
+        Info << "Writing field M_0 (zeroth moment of the CMD)"
+        << nl << endl;
         M0_->write();
     }
     if(isFirstMomentOn_)
@@ -151,7 +117,8 @@ Foam::aggBrePostprocess::aggBrePostprocess
             )
         );
 
-        Info << "Writing field M_1" << nl << endl;
+        Info << "Writing field M_1 (first moment of the CMD)"
+        << nl << endl;
         M1_->write();
     }
     if(isSecondMomentOn_)
@@ -172,7 +139,8 @@ Foam::aggBrePostprocess::aggBrePostprocess
             )
         );
 
-        Info << "Writing field M_2" << nl << endl;
+        Info << "Writing field M_2 (second moment of the CMD)"
+             << nl << endl;
         M2_->write();
     }
     if(isVmeanOn_)
@@ -193,7 +161,8 @@ Foam::aggBrePostprocess::aggBrePostprocess
             )
         );
 
-        Info << "Writing field v_mean" << nl << endl;
+        Info << "Writing field v_mean (mean number of "
+             << "monomers per cluster)" << nl << endl;
         vMean_->write();
     }
     if(isRmeanOn_)
@@ -214,7 +183,8 @@ Foam::aggBrePostprocess::aggBrePostprocess
             )
         );
 
-        Info << "Writing field R_mean" << nl << endl;
+        Info << "Writing field R_mean (mean radius of gyration)"
+             << nl << endl;
         rMean_->write();
     }
     if(isI0On_)
@@ -235,7 +205,8 @@ Foam::aggBrePostprocess::aggBrePostprocess
             )
         );
 
-        Info << "Writing field R_mean" << nl << endl;
+        Info << "Writing field I0 (zero angle light scater "
+             << "intensity)" << nl << endl;
         I0_->write();
     }
     if(isPAon_)
@@ -256,11 +227,12 @@ Foam::aggBrePostprocess::aggBrePostprocess
             )
         );
 
-        Info << "Writing field PA" << nl << endl;
+        Info << "Writing field PA (fraction of aggregated "
+             << "monomers)" << nl << endl;
         PA_->write();
     }
 
-    if(isDifAggCharTime_)
+    if(isDifAggCharTimeOn_)
     {
         td_.set
         (
@@ -278,18 +250,20 @@ Foam::aggBrePostprocess::aggBrePostprocess
             )
         );
 
-        Info << "Writing field t_d" << nl << endl;
+        Info << "Writing field t_d (diffusion aggregation "
+             << "characteristic time)"
+             << nl << endl;
         td_->write();
     }
 
-    if(isAggCharTimeOn_ || isBreCharTimeOn_ || isKabFieldOn_)
+    if(isShearAggCharTimeOn_ || isBreCharTimeOn_ || isKabFieldOn_)
     {
         const volScalarField& C_0(CMD[0]);
 
         // Check whether strain rate tensor is not on objectRegistry
         if(C_0.db().foundObject<volScalarField>(word("G")))
         {            
-            if(isAggCharTimeOn_)
+            if(isShearAggCharTimeOn_)
             {
                 ta_.set
                 (
@@ -297,7 +271,7 @@ Foam::aggBrePostprocess::aggBrePostprocess
                     (
                         IOobject
                         (
-                            "t_a",
+                            "t_s",
                             runTime_.timeName(),
                             mesh_,
                             IOobject::NO_READ,
@@ -307,8 +281,32 @@ Foam::aggBrePostprocess::aggBrePostprocess
                     )
                 );
 
-                Info << "Writing field t_a" << nl << endl;
+                Info << "Writing field t_s (shear aggregationcharacteristic time)"
+                     << nl << endl;
                 ta_->write();
+            }
+
+            if(isAggPecletOn_)
+            {
+                Pe_.set
+                (
+                    new volScalarField
+                    (
+                        IOobject
+                        (
+                            "Pe",
+                            runTime_.timeName(),
+                            mesh_,
+                            IOobject::NO_READ,
+                            IOobject::AUTO_WRITE
+                        ),
+                        Pe()
+                    )
+                );
+
+                Info << "Writing field Pe (aggregation Péclet number)"
+                     << nl << endl;
+                Pe_->write();
             }
 
             if(isBreCharTimeOn_)
@@ -329,7 +327,8 @@ Foam::aggBrePostprocess::aggBrePostprocess
                     )
                 );
 
-                Info << "Writing field t_b" << nl << endl;
+                Info << "Writing field t_b (breakup characteristic time)"
+                     << nl << endl;
                 tb_->write();
             }
 
@@ -351,7 +350,8 @@ Foam::aggBrePostprocess::aggBrePostprocess
                     )
                 );
 
-                Info << "Writing field K_ab" << nl << endl;
+                Info << "Writing field K_ab (aggregation breakup ratio)"
+                     << nl << endl;
                 Kab_->write();
             }
 
@@ -365,33 +365,6 @@ Foam::aggBrePostprocess::aggBrePostprocess
                 << nl << endl;
         }
 
-
-    }
-
-    if(isAggPecletOn_)
-    {
-        Pe_.set
-        (
-            new volScalarField
-            (
-                IOobject
-                (
-                    "Pe",
-                    runTime_.timeName(),
-                    mesh_,
-                    IOobject::NO_READ,
-                    IOobject::AUTO_WRITE
-                ),
-                Pe()
-            )
-        );
-
-        Info << "Writing field Pe"
-             << nl << endl;
-        Pe_->write();
-    }
-    if(isAvgConcentrationOn_)
-    {
 
     }
 
@@ -436,7 +409,7 @@ Foam::aggBrePostprocess::aggBrePostprocess
             )
         );
 
-        Info << "Writing field Da"
+        Info << "Writing field Da (aggregation Damköhled number)"
              << nl << endl;
         Da_->write();
     }
@@ -603,8 +576,10 @@ Foam::tmp<volScalarField> Foam::aggBrePostprocess::PA() const
 Foam::tmp<volScalarField> Foam::aggBrePostprocess::t_s() const
 {
     scalar eta(readScalar(aggBreakupDict_.lookup("eta")));
+
     //alpha is actually dimless but we are using dimMoles to account platelets
     dimensionedScalar alpha("alpha", dimless/dimMoles, 32./3.);
+
     const dimensionedScalar& R_p(rList_[0]);
 
     return
@@ -643,11 +618,11 @@ Foam::tmp<volScalarField> Foam::aggBrePostprocess::t_b() const
 
     return
     (
-        1.0 /
-        (
-            alin * pow(G()/Gstar, b) +
-            dimensionedScalar("VSMALL", dimless/dimTime, VSMALL)
-        )
+          1.0
+        / (
+              alin*pow(G()/Gstar, b)
+            + dimensionedScalar("VSMALL", dimless/dimTime, VSMALL)
+          )
     );
 }
 
@@ -656,7 +631,8 @@ Foam::tmp<volScalarField> Foam::aggBrePostprocess::K_ab() const
 {
     return
     (
-        t_b() / (t_s() + dimensionedScalar("VSMALL", dimTime, VSMALL))
+          t_b()/(t_s() + dimensionedScalar("VSMALL", dimTime, VSMALL))
+        * (1.0 + Pe())/Pe()
     );
 }
 
@@ -696,13 +672,15 @@ Foam::tmp<volScalarField> Foam::aggBrePostprocess::Da() const
 {
     return
     (
-        t_adv() / (t_s() + dimensionedScalar("VSMALL", dimTime, VSMALL))
+          t_adv() / (t_s() + dimensionedScalar("VSMALL", dimTime, VSMALL))
+        * (1.0 + Pe())/Pe()
     );
 }
 
 
 Foam::tmp<volScalarField> Foam::aggBrePostprocess::t_d() const
 {
+    scalar eta(readScalar(aggBreakupDict_.lookup("eta")));
     dimensionedScalar T = aggBreakupDict_.lookup("T");
     dimensionedScalar muPlasma = aggBreakupDict_.lookup("muPlasma");
     //Boltzmann constant [J K−1]
@@ -719,7 +697,7 @@ Foam::tmp<volScalarField> Foam::aggBrePostprocess::t_d() const
             // substance) to account platelets
             dimensionedScalar("one", dimMoles, 1.0) /
             (
-                4.0 * M_PI * (2.0 * R_mono) * (2.0 * D_mono) * moment(1.0) +
+                eta * 4.0 * M_PI * (2.0 * R_mono) * (2.0 * D_mono) * moment(1.0) +
                 dimensionedScalar("VSMALL", dimMoles/dimTime, VSMALL)
             ),
             dimensionedScalar("GREAT", dimTime, GREAT)
@@ -789,6 +767,11 @@ void Foam::aggBrePostprocess::update()
                 ta_() = t_s();
             }
 
+            if(isAggPecletOn_.valid())
+            {
+                Pe_() = Pe();
+            }
+
             if(tb_.valid())
             {
                 tb_() = t_b();
@@ -829,37 +812,51 @@ void Foam::aggBrePostprocess::operator=(const aggBrePostprocess& rhs)
 
 Foam::Ostream& Foam::operator<<(Ostream& os, const aggBrePostprocess& sds)
 {
-    os << endl << "Post-processing switches:" << endl;
-    os.writeKeyword("isKabFieldOn") << sds.isKabFieldOn_
-                                    << token::END_STATEMENT
-                                    << endl;
-    os.writeKeyword("isAggCharTimeOn") << sds.isAggCharTimeOn_
-                                       << token::END_STATEMENT
-                                       << endl;
-    os.writeKeyword("isBreCharTimeOn") << sds.isBreCharTimeOn_
-                                       << token::END_STATEMENT
-                                       << endl;
-    os.writeKeyword("isAggPecletOn") << sds.isAggPecletOn_
-                                     << token::END_STATEMENT
-                                     << endl;
-    os.writeKeyword("isAvgConcentrationOn") << sds.isAvgConcentrationOn_
-                                            << token::END_STATEMENT
-                                            << endl;
-    os.writeKeyword("isZerothMomentOn") << sds.isZerothMomentOn_
-                                        << token::END_STATEMENT
-                                        << endl;
-    os.writeKeyword("isFirstMomentOn") << sds.isFirstMomentOn_
-                                       << token::END_STATEMENT
-                                       << endl;
-    os.writeKeyword("isSecondMomentOn") << sds.isSecondMomentOn_
-                                        << token::END_STATEMENT
-                                        << endl;
-    os.writeKeyword("isVmeanOn") << sds.isVmeanOn_
-                                 << token::END_STATEMENT
-                                 << endl;
-    os.writeKeyword("isRmeanOn") << sds.isRmeanOn_
-                                 << token::END_STATEMENT
-                                 << endl;
+    os << "Post-processing switches:" << endl;
+    os.writeKeyword("t_s") << sds.isShearAggCharTimeOn_
+                           << token::END_STATEMENT
+                           << endl;
+    os.writeKeyword("t_d") << sds.isDifAggCharTimeOn_
+                           << token::END_STATEMENT
+                           << endl;
+    os.writeKeyword("Pe") << sds.isAggPecletOn_
+                          << token::END_STATEMENT
+                          << endl;
+    os.writeKeyword("t_b") << sds.isBreCharTimeOn_
+                           << token::END_STATEMENT
+                           << endl;
+    os.writeKeyword("K_ab") << sds.isKabFieldOn_
+                            << token::END_STATEMENT
+                            << endl;
+    os.writeKeyword("M_0") << sds.isZerothMomentOn_
+                           << token::END_STATEMENT
+                           << endl;
+    os.writeKeyword("M_1") << sds.isFirstMomentOn_
+                           << token::END_STATEMENT
+                           << endl;
+    os.writeKeyword("M_2") << sds.isSecondMomentOn_
+                           << token::END_STATEMENT
+                           << endl;
+    os.writeKeyword("v_mean") << sds.isVmeanOn_
+                              << token::END_STATEMENT
+                              << endl;
+    os.writeKeyword("R_mean") << sds.isRmeanOn_
+                              << token::END_STATEMENT
+                              << endl;
+    os.writeKeyword("I0") << sds.isI0On_
+                          << token::END_STATEMENT
+                          << endl;
+    os.writeKeyword("PA") << sds.isPAon_
+                          << token::END_STATEMENT
+                          << endl;
+    os.writeKeyword("t_adv") << sds.isAdvCharTimeOn_
+                             << token::END_STATEMENT
+                             << endl;
+    os.writeKeyword("Da") << sds.isAggDamkoehlerOn_
+                          << token::END_STATEMENT
+                          << endl;
+    os << endl;
+
     return os;
 }
 

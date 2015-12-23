@@ -158,7 +158,7 @@ void Foam::aggBreakup::updateKernelsInCell(const label& celli)
     {
         for(int i = 0; i < nBins_; ++i)
         {
-            kb_()[i] = pow(G / Gstar_.value(), b_) * kbBase_()[i];
+            kb_()[i] = pow(G, b_) * kbBase_()[i];
         }
     }
 }
@@ -359,10 +359,23 @@ Foam::autoPtr<scalarSquareMatrix> Foam::aggBreakup::shear_kernelBase()
 
 Foam::autoPtr<scalarField> Foam::aggBreakup::breakup_kernelBase()
 {
+    if(a_.value() != 1.0)
+    {
+        Info << "In the dictionary " << name()
+             << " the breakup constant \'a != 1 s^-1\' was given."
+             << " Calculating new Gstar from a, b, c, and R_p." << endl;
+        Gstar_.value() = pow
+        (
+            a_.value() * pow(Rlist_[0].value(), c_),
+            -1.0/b_
+        );
+    }
+
     autoPtr<scalarField> kbBase(new scalarField(nBins_, 0.0));
     // fill the radii part of the breakup kernel. The shear part depends
     // on the cell shear rate, therefore the breKernel is calculated
     // elsewhere.
+
     for(int i = 0; i < nBins_; ++i)
     {
         //monomer doesn't break
@@ -372,7 +385,8 @@ Foam::autoPtr<scalarField> Foam::aggBreakup::breakup_kernelBase()
         }
         else
         {
-            kbBase()[i] = pow(Rlist_[i].value() / Rlist_[0].value(), c_);
+            kbBase()[i] =   pow(Rlist_[i].value() / Rlist_[0].value(), c_)
+                          / pow(Gstar_.value(), b_) ;
         }
     }
 
@@ -387,18 +401,6 @@ Foam::autoPtr<scalarField> Foam::aggBreakup::breakup_kernelBase()
                                  << tab;
         }
         ofBreakupKernelDebug << endl;
-    }
-
-    if(a_.value() != 1.0)
-    {
-        Info << "In the dictionary " << name()
-             << " the breakup constant \'a != 1 s^-1\' was given."
-             << " Calculating new Gstar from a, b, c, and R_p." << endl;
-        Gstar_.value() = pow
-        (
-            a_.value() * pow(Rlist_[0].value(), c_),
-            -1.0/b_
-        );
     }
 
     return kbBase;
@@ -905,6 +907,7 @@ void Foam::aggBreakup::update()
               ==
               - fvc::Sp(vWF_(),Crp_())
             );
+            massTransport.relax();
             massTransport.solve(mesh_.solver("C_*"));
         }
         else
@@ -915,6 +918,7 @@ void Foam::aggBreakup::update()
               + fvm::div(phi_, Crp_(), "div(phi,C_*)")
               - fvm::laplacian(Dlist_[0], Crp_(), "laplacian(D,C_*)")
             );
+            massTransport.relax();
             massTransport.solve(mesh_.solver("C_*"));
         }
     }
@@ -978,6 +982,7 @@ void Foam::aggBreakup::update()
                     ==
                         fvc::Sp(vWF_(),Crp_().oldTime())
                     );
+                    massTransport.relax();
                     massTransport.solve(mesh_.solver("C_*"));
 
                 }
@@ -989,6 +994,7 @@ void Foam::aggBreakup::update()
                       + fvm::div(phi_, Ci, "div(phi,C_*)")
                       - fvm::laplacian(D, Ci, "laplacian(D,C_*)")
                     );
+                    massTransport.relax();
                     massTransport.solve(mesh_.solver("C_*"));
                 }
 
@@ -1001,6 +1007,7 @@ void Foam::aggBreakup::update()
                   + fvm::div(phi_, Ci, "div(phi,C_*)")
                   - fvm::laplacian(Di, Ci, "laplacian(D,C_*)")
                 );
+                massTransport.relax();
                 massTransport.solve(mesh_.solver("C_*"));
             }
 
@@ -1236,6 +1243,8 @@ Foam::tmp<volScalarField> Foam::aggBreakup::kbr(label i) const
 {
     dimensionedScalar alin("a\'", dimless/dimTime, 1.0);
 
+    // workaround: pow(alin, -b_), because dimensioned pow(G*, b_) is in kbBase_,
+    // which is dimensionless.
     tmp<volScalarField> k
     (
         new volScalarField
@@ -1246,7 +1255,7 @@ Foam::tmp<volScalarField> Foam::aggBreakup::kbr(label i) const
                 runTime_.timeName(),
                 mesh_
             ),
-            alin * pow(G_() / Gstar_, b_) * kbBase_()[i]
+            alin * pow(alin, -b_) * pow(G_(), b_) * kbBase_()[i]
         )
     );
 
