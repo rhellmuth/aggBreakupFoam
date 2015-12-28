@@ -43,7 +43,7 @@ SourceFiles
 #include "ODESystem.H"
 #include "ODESolver.H"
 
-#include "../aggBrePostprocess/aggBrePostprocess.H"
+#include "aggBrePostprocess/aggBrePostprocess.H"
 
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 
@@ -64,15 +64,13 @@ namespace Foam
 
 class aggBreakup
 :
-    private ODESystem
+    private ODESystem,
+    public IOdictionary
 {
     // Private data
 
         const volVectorField& U_;
         const surfaceScalarField& phi_;
-
-        //-Viscosity
-        const volScalarField& mu_;
 
         const fvMesh& mesh_;
         const Time& runTime_;
@@ -80,12 +78,14 @@ class aggBreakup
         //-Colloid cluster fields
         PtrList<volScalarField> CMD_;
 
-        //-Strain rate field
-        autoPtr<volTensorField> strainRate_;
+        PtrList<volScalarField> CMDold_;
+
+        //-Absolute velocity gradient
+        autoPtr<volScalarField> G_;
 
         // CMD discretization scheme data
 
-            autoPtr<IOdictionary> aggBreakupDict_;
+            bool isPBEcoupled_;
 
             //-Specify the bin structure you want to use
             // * True => use a linear bin structure and solve the PBE in
@@ -103,7 +103,7 @@ class aggBreakup
         // Cluster structure data
 
             //-Monomer mean radius (m)
-            dimensionedScalar Rmono_;
+            dimensionedScalar Rp_;
 
             //-Radius of gyration the cluster 'i'
             PtrList<dimensionedScalar> Rlist_;
@@ -125,20 +125,24 @@ class aggBreakup
 
                 bool isBrowninanAggOn_;
                 bool isShearAggOn_;
+                bool isSorensenianAggOn_;
 
                 //-Aggregation efficiency
                 scalar eta_;
 
-                //-Shear collision kernel shape factor
-                tmp<volScalarField> alpha_;
-
                 //-Base Temperature
                 dimensionedScalar T_;
 
+                //-Plasma viscosity
+                dimensionedScalar mu_;
+
+                //-Diffusivity
+                PtrList<dimensionedScalar> Dlist_;
+
                 //-Base aggregation kernel (shear excluded)
-                autoPtr<scalarSquareMatrix> brownianAggKernel_;
-                autoPtr<scalarSquareMatrix> shearAggKernel_;
-                autoPtr<scalarSquareMatrix> aggKernel_;
+                autoPtr<scalarSquareMatrix> kdBase_;
+                autoPtr<scalarSquareMatrix> ksBase_;
+                autoPtr<scalarSquareMatrix> kc_;
 
             // Breakup data
 
@@ -151,13 +155,20 @@ class aggBreakup
 
                 //-Base breakup kernel (just the Radii part, shear part
                 // excluded)
-                autoPtr<scalarField> Rc_;
+                autoPtr<scalarField> kbBase_;
 
                 //-Breakup kernel
-                autoPtr<scalarField> breKernel_;
+                autoPtr<scalarField> kb_;
 
                 //-Fragment mass distribution
                 autoPtr<scalarSquareMatrix> fragMassDistr_;
+
+            // Activation rule
+
+                bool isActivationOn_;
+                scalar activThreshold_; //shear rate
+                scalar activRate_;
+                autoPtr<volScalarField> Crp_;
 
         // ODE solver
         autoPtr<ODESolver> solver_;
@@ -175,10 +186,10 @@ class aggBreakup
         // ODE parameters
 
             //- Return number of equations
-            virtual label nEqns() const;
-//            {
-//                return label(nBins_);
-//            }
+            virtual label nEqns() const
+            {
+                return nBins_;
+            }
 
             //- Return derivatives
             virtual void derivatives
@@ -197,11 +208,36 @@ class aggBreakup
                 scalarSquareMatrix& dfdy
             ) const;
 
-        scalarField smoluchowski(const scalarField& y);
 
-        void updateAggKernel(const label& celli);
-        void updateBreKernel(const label& celli);
+        void updateKernelsInCell(const label& celli);
 
+        tmp<volScalarField> S(label clusterI) const;
+
+        tmp<volScalarField> kag(label i, label j) const;
+        tmp<volScalarField> kbr(label i) const;
+
+        dimensionedScalar einsteinStokes
+        (
+            const dimensionedScalar& R,
+            const dimensionedScalar& T,
+            const dimensionedScalar& mu
+        );
+
+        dimensionedScalar radiusOfGyration
+        (
+            const scalar& v,
+            const scalar& D_F,
+            const dimensionedScalar& R_p
+        );
+
+        void allocChi();
+
+        autoPtr<scalarSquareMatrix> Brownian_kernel();
+        autoPtr<scalarSquareMatrix> shear_kernelBase();
+        autoPtr<scalarField> breakup_kernelBase();
+        autoPtr<scalarSquareMatrix> fragMassDistr();
+
+        autoPtr<volScalarField> vWF_;
 
 public:
 
@@ -217,8 +253,7 @@ public:
         aggBreakup
         (
             const volVectorField& U,
-            const surfaceScalarField& phi,
-            const volScalarField& mu
+            const surfaceScalarField& phi
         );
 
 
@@ -240,7 +275,7 @@ public:
 
         // Access
 
-        void readDict(string dictName);
+        void readDict();
 
         void setCMD();
 
@@ -250,9 +285,9 @@ public:
 
         // Edit
 
-            void solveAggBreakup();
+            void update();
 
-            void solveTransport();
+            void solveAggBreakup();
 
         // Write
 
@@ -272,7 +307,7 @@ public:
 
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 
-#include "aggBreakupI.H"
+//#include "aggBreakupI.H"
 
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 

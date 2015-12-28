@@ -1,5 +1,7 @@
+aggBreakupFoam.creator.user*
 *.o
 *.dep
 *.autosave
 *~
 Make/linux64GccDPOpt/
+Make/linuxGccDPOpt/
