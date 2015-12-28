@@ -59,6 +59,8 @@ namespace Foam
 \*---------------------------------------------------------------------------*/
 
 class aggBrePostprocess
+:
+    public dictionary
 {
     // Private data
 
@@ -75,19 +77,21 @@ class aggBrePostprocess
         const PtrList<dimensionedScalar>& rList_;
 
         //- Swiches
-        bool isThetaFieldOn_;
-        bool isAggCharTimeOn_;
-        bool isBreCharTimeOn_;
-        bool isAggPecletOn_;
-        bool isAvgConcentrationOn_;
-        bool isZerothMomentOn_;
-        bool isFirstMomentOn_;
-        bool isSecondMomentOn_;
-        bool isVmeanOn_;
-        bool isRmeanOn_;
-        bool isAggFractionOn_;
-        bool isCellFlowCharTimeOn_;
-        bool isAggAdvRatioOn_;
+        Switch isShearAggCharTimeOn_;
+        Switch isDifAggCharTimeOn_;
+        Switch isBreCharTimeOn_;
+        Switch isAggPecletOn_;
+        Switch isKabFieldOn_;
+        Switch isAdvCharTimeOn_;
+        Switch isAggDamkoehlerOn_;
+        Switch isZerothMomentOn_;
+        Switch isFirstMomentOn_;
+        Switch isSecondMomentOn_;
+        Switch isVmeanOn_;
+        Switch isRmeanOn_;
+        Switch isI0On_;
+        Switch isPAon_;
+
 
         //-Aggregation characteristic time field
         autoPtr<volScalarField> ta_;
@@ -95,23 +99,29 @@ class aggBrePostprocess
         //-Breakup characteristic time field
         autoPtr<volScalarField> tb_;
 
-        //-Aggregation-breakup ratio field
-        autoPtr<volScalarField> theta_;
+        //-Diffusion characteristic time for aggregation
+        autoPtr<volScalarField> td_;
 
-        //-Aggregation Péclet number field
-        autoPtr<volScalarField> aggPe_;
+        //-Advection characteristic time
+        autoPtr<volScalarField> tadv_;
+
+        //-Aggregation-breakup ratio field
+        autoPtr<volScalarField> Kab_;
+
+        //-Aggregation Péclet number for (shear agg rate / diffusion agg rate)
+        autoPtr<volScalarField> Pe_;
 
         //-Average monomer concentration in the whole system
         //scalar ta_;
 
         //-Zeroth moment field
-        autoPtr<volScalarField> zerothMoment_;
+        autoPtr<volScalarField> M0_;
 
         //-First moment field
-        autoPtr<volScalarField> firstMoment_;
+        autoPtr<volScalarField> M1_;
 
         //-Second moment field
-        autoPtr<volScalarField> secondMoment_;
+        autoPtr<volScalarField> M2_;
 
         //-Mean number of monomers per aggregate
         autoPtr<volScalarField> vMean_;
@@ -119,13 +129,13 @@ class aggBrePostprocess
         //-Aggregates mean radius of gyration
         autoPtr<volScalarField> rMean_;
 
+        //-Zero angle intensity
+        autoPtr<volScalarField> I0_;
+
         //-Aggregation fraction in %
         autoPtr<volScalarField> PA_;
 
-        //-Convection characteristic time
-        autoPtr<volScalarField> tf_;
-
-        //-Damköhler number for aggregation rate / advection rate
+        //-Damköhler number for (aggregation rate / advection rate)
         autoPtr<volScalarField> Da_;
 
 
@@ -147,7 +157,7 @@ public:
         //- Construct from dictionary
         aggBrePostprocess
         (
-                const dictionary& aggBreakupDict,
+                const dictionary& postProcDict,
                 const PtrList<volScalarField>& CMD,
                 const PtrList<scalar>& vList,
                 const PtrList<dimensionedScalar>& rList
@@ -171,19 +181,18 @@ public:
 
         // Edit
         tmp<volScalarField> G() const;
-        tmp<volScalarField> M_0() const;
-        tmp<volScalarField> M_1() const;
-        tmp<volScalarField> M_2() const;
+        tmp<volScalarField> moment(scalar order) const;
         tmp<volScalarField> vMean() const;
         tmp<volScalarField> rMean() const;
-        tmp<volScalarField> t_a() const;
+        tmp<volScalarField> I0() const;
+        tmp<volScalarField> t_s() const;
         tmp<volScalarField> t_b() const;
-        tmp<volScalarField> theta() const;
+        tmp<volScalarField> K_ab() const;
         tmp<volScalarField> PA() const;
-        tmp<volScalarField> t_f() const;
+        tmp<volScalarField> t_adv() const;
         tmp<volScalarField> Da() const;
-//        tmp<volScalarField> t_d() const;
-//        tmp<volScalarField> Pe() const;
+        tmp<volScalarField> t_d() const;
+        tmp<volScalarField> Pe() const;
 
         void update();
 
@@ -204,7 +213,7 @@ public:
 
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 
-#include "aggBrePostprocessI.H"
+//#include "aggBrePostprocessI.H"
 
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 

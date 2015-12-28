@@ -35,12 +35,6 @@ namespace Foam
 
 // * * * * * * * * * * * * * Private Member Functions  * * * * * * * * * * * //
 
-label Foam::aggBreakup::nEqns() const
-{
-    return nBins_;
-}
-
-
 void Foam::aggBreakup::derivatives
 (
     const scalar x,
@@ -55,7 +49,7 @@ void Foam::aggBreakup::derivatives
     scalarField destruction(nBins_, 0.0);
 
     // aggregation PBE by Smoluchowski (1917)
-    if(isBrowninanAggOn_ || isShearAggOn_)
+    if(isBrowninanAggOn_ || isShearAggOn_ || isSorensenianAggOn_)
     {
         creation = 0.0;
         destruction = 0.0;
@@ -66,11 +60,12 @@ void Foam::aggBreakup::derivatives
             {
                 for(int j = 0; j < i; ++j)
                 {
-                    creation[i] += 0.5 * aggKernel_()[i-j-1][j] * y[i-j-1] * y[j];
+                    creation[i] += 0.5 * kc_()[i-j-1][j]
+                                    * y[i-j-1] * y[j];
                 }
                 for(int j = 0; j < nBins_; ++j)
                 {
-                    destruction[i] += aggKernel_()[i][j] * y[i] * y[j];
+                    destruction[i] += kc_()[i][j] * y[i] * y[j];
                 }
             }
         }
@@ -82,13 +77,11 @@ void Foam::aggBreakup::derivatives
                 {
                     for(int k = 0; k < nBins_; ++k)
                     {
-                        creation[i] += 0.5 * chi_[j][k][i] * aggKernel_()[j][k] *
-                                y[j] * y[k];
+                        creation[i] += 0.5 * chi_[j][k][i] * kc_()[j][k]
+                                        * y[j] * y[k];
                     }
-                }
-                for(int j = 0; j < nBins_; ++j)
-                {
-                    destruction[i] += aggKernel_()[i][j] * y[i] * y[j];
+
+                    destruction[i] += kc_()[i][j] * y[i] * y[j];
                 }
             }
         }
@@ -106,10 +99,10 @@ void Foam::aggBreakup::derivatives
         {
             for(int j = i + 1; j < nBins_; ++j)
             {
-                creation[i] += fragMassDistr_()[i][j] * breKernel_()[j] * y[j];
+                creation[i] += fragMassDistr_()[i][j] * kb_()[j] * y[j];
             }
 
-            destruction[i] = breKernel_()[i] * y[i];
+            destruction[i] = kb_()[i] * y[i];
         }
 
         breakup = creation - destruction;
@@ -127,148 +120,389 @@ void Foam::aggBreakup::jacobian
     scalarSquareMatrix& dfdy
 ) const
 {
-    notImplemented("Oscilator::jacobian(...) const");
+    notImplemented("aggBreakup::jacobian(...) const");
 }
 
-scalarField Foam::aggBreakup::smoluchowski(const scalarField& y)
-{
-    scalarField creation(nBins_, 0.0);
-    scalarField destruction(nBins_, 0.0);
 
-    if(isGridUniform_)
+void Foam::aggBreakup::updateKernelsInCell(const label& celli)
+{
+    const scalar& G = G_()[celli];
+
+    if(isShearAggOn_ || isBrowninanAggOn_ || isSorensenianAggOn_)
+    {
+        // clear aggKernel
+        for(int i = 0; i < nBins_; ++i)
+        {
+            for(int j = 0; j < nBins_; ++j)
+            {
+                kc_()[i][j] = 0.0;
+
+                if(isShearAggOn_)
+                {
+                    kc_()[i][j] += G * ksBase_()[i][j];
+                }
+                if(isBrowninanAggOn_ || isSorensenianAggOn_)
+                {
+                    kc_()[i][j] += kdBase_()[i][j];
+
+                    if(isSorensenianAggOn_)
+                    {
+                        kc_()[i][j] += 1.05 * G * kdBase_()[i][j]; //Sorensen EDM
+                    }
+                }
+            }
+        }
+    }
+
+    if(isBreakupOn_)
     {
         for(int i = 0; i < nBins_; ++i)
         {
-            for(int j = 0; j < i; ++j)
-            {
-                creation[i] += 0.5 * aggKernel_()[i-j-1][j] * y[i-j-1] * y[j];
-            }
+            kb_()[i] = pow(G, b_) * kbBase_()[i];
+        }
+    }
+}
+
+Foam::dimensionedScalar Foam::aggBreakup::einsteinStokes
+(
+    const dimensionedScalar& R,
+    const dimensionedScalar& T,
+    const dimensionedScalar& mu
+)
+{
+    //Defines brownian diffusivity constant using to Einstein-Stokes equation.
+
+    //Boltzmann constant [J K−1]
+    dimensionedScalar kB
+    (
+        "k_B",
+        dimEnergy / dimTemperature,
+        1.3806488E-23
+    );
+    return kB * T / (6.0 * M_PI * mu * R);
+}
+
+Foam::dimensionedScalar Foam::aggBreakup::radiusOfGyration
+(
+    const scalar& v,
+    const scalar& D_F,
+    const dimensionedScalar& R_p
+)
+{
+    //Radius of gyration of a fractal aggregate ball.
+    return pow(v, 1.0/D_F) * R_p;
+}
+
+void Foam::aggBreakup::allocChi()
+{
+    //Interpolation function of Kumar & Ramkrishna (1997),
+    //also presented by Garrick, Lehtinen & Zachariah (2006).
+
+    Info << "Allocating the interpolation (chi) array" << nl << endl;
+    chi_ = new scalar**[nBins_];
+
+    for(int i = 0; i < nBins_; ++i)
+    {
+        chi_[i] = new scalar*[nBins_];
+        for(int j = 0; j < nBins_; ++j)
+        {
+            //allocates and initializes = 0
+            chi_[i][j] = new scalar[nBins_]();
+        }
+    }
+
+    scalar vSum[nBins_][nBins_];
+    forAll(vList_, i)
+    {
+        forAll(vList_, j)
+        {
+            vSum[i][j] = vList_[i] + vList_[j];
+        }
+    }
+
+    for(int k = 0; k < nBins_; ++k)
+    {
+        for(int i = 0; i < nBins_; ++i)
+        {
             for(int j = 0; j < nBins_; ++j)
             {
-                destruction[i] += aggKernel_()[i][j] * y[i] * y[j];
+                if(k < nBins_ - 1) //all but the last bin
+                {
+                    if
+                    (
+                           (vSum[i][j] <= vList_[k+1])
+                        && (vSum[i][j] >= vList_[k])
+                    )
+                    {
+                        chi_[i][j][k] =   (vList_[k+1] - vSum[i][j])
+                                        / (vList_[k+1] - vList_[k]);
+                    }
+                }
+                if
+                (
+                       (vSum[i][j] <= vList_[k])
+                    && (vSum[i][j] >= vList_[k-1])
+                )
+                {
+                    chi_[i][j][k] =   (vSum[i][j] - vList_[k-1])
+                                    / (vList_[k] - vList_[k-1]);
+                }
+            }
+        }
+        if(debug)
+        {
+            //output file
+            OFstream ofChi("chi_k" + to_string(k));
+            for(int i = 0; i < nBins_; ++i)
+            {
+                for(int j = 0; j < nBins_; ++j)
+                {
+                    ofChi << chi_[i][j][k] << tab;
+                }
+                ofChi << nl;
+            }
+        }
+    }
+}
+
+
+Foam::autoPtr<scalarSquareMatrix> Foam::aggBreakup::Brownian_kernel()
+{
+    autoPtr<scalarSquareMatrix> k_d(new scalarSquareMatrix(nBins_));
+    for(int i = 0; i < nBins_; ++i)
+    {
+        for(int j = 0; j < nBins_; ++j)
+        {
+            //Remove i,j = n from Smoluchowski collision kernel. Aggregation
+            // with the largest class of aggregate would cause mass loss.
+            if((i == nBins_-1) || (j == nBins_-1))
+            {
+                k_d()[i][j] = 0.0;
+            }
+            else
+            {
+                k_d()[i][j] =
+                (
+                4.0 * M_PI
+                * (Rlist_[i].value() + Rlist_[j].value())
+                * (Dlist_[i].value() + Dlist_[j].value())
+                );
+            }
+        }
+    }
+
+    if(debug)
+    {
+        //output file
+        OFstream ofBrownKernel("k_d");
+        for(int i = 0; i < nBins_; ++i)
+        {
+            for(int j = 0; j < nBins_; ++j)
+            {
+                ofBrownKernel << k_d()[i][j]
+                              << tab;
+            }
+            ofBrownKernel << nl;
+        }
+        ofBrownKernel << endl;
+    }
+    return k_d;
+}
+
+
+Foam::autoPtr<scalarSquareMatrix> Foam::aggBreakup::shear_kernelBase()
+{
+    // allocating shear collision kernel (excluding shear)
+    autoPtr<scalarSquareMatrix> ksBase(new scalarSquareMatrix(nBins_));
+
+    for(int i = 0; i < nBins_; ++i)
+    {
+        for(int j = 0; j < nBins_; ++j)
+        {
+            //Remove i,j = n from Smoluchowski collision kernel. Aggregation
+            // with the largest class of aggregate would cause mass loss.
+            if((i == nBins_-1) || (j == nBins_-1))
+            {
+                ksBase()[i][j] = 0.0;
+            }
+            else
+            {
+                ksBase()[i][j] =
+                (
+                    (4.0/3.0) * pow
+                    (
+                        Rlist_[i].value() + Rlist_[j].value(),
+                        3.0
+                    )
+                );
+            }
+        }
+    }
+
+    if(debug)
+    {
+        //output file
+        OFstream ofShearKernel("k_s");
+        for(int i = 0; i < nBins_; ++i)
+        {
+            for(int j = 0; j < nBins_; ++j)
+            {
+                ofShearKernel << ksBase()[i][j]
+                              << tab;
+            }
+            ofShearKernel << nl;
+        }
+    }
+
+    return ksBase;
+}
+
+Foam::autoPtr<scalarField> Foam::aggBreakup::breakup_kernelBase()
+{
+    if(a_.value() != 1.0)
+    {
+        Info << "In the dictionary " << name()
+             << " the breakup constant \'a != 1 s^-1\' was given."
+             << " Calculating new Gstar from a, b, c, and R_p." << endl;
+        Gstar_.value() = pow
+        (
+            a_.value() * pow(Rlist_[0].value(), c_),
+            -1.0/b_
+        );
+    }
+
+    autoPtr<scalarField> kbBase(new scalarField(nBins_, 0.0));
+    // fill the radii part of the breakup kernel. The shear part depends
+    // on the cell shear rate, therefore the breKernel is calculated
+    // elsewhere.
+
+    for(int i = 0; i < nBins_; ++i)
+    {
+        //monomer doesn't break
+        if(i==0)
+        {
+             kbBase()[i] = 0.0;
+        }
+        else
+        {
+            kbBase()[i] =   pow(Rlist_[i].value() / Rlist_[0].value(), c_)
+                          / pow(Gstar_.value(), b_) ;
+        }
+    }
+
+    if(debug)
+    {
+        Info << "Writing (R_i/R_p)^c in file \"k_b\"" << nl << endl;
+        //output file
+        OFstream ofBreakupKernelDebug("k_b");
+        for(int i = 0; i < nBins_; ++i)
+        {
+            ofBreakupKernelDebug << kbBase()[i]
+                                 << tab;
+        }
+        ofBreakupKernelDebug << endl;
+    }
+
+    return kbBase;
+}
+
+Foam::autoPtr<scalarSquareMatrix> Foam::aggBreakup::fragMassDistr()
+{
+    // allocating fragment mass distribution
+    autoPtr<scalarSquareMatrix> g(new scalarSquareMatrix(nBins_));
+
+    // Set binary fragment mass distribution for uniform and geometric grids
+    // You can implement other fragment mass distributions if you like
+    // (e.g., normal, erosion, uniform...)
+    if(isGridUniform_)
+    {
+        for(int j = 0; j < nBins_; ++j)
+        {
+            scalarField p(nBins_, 0.0);
+            for(int i = 0; i < (j + 1) / 2; ++i)
+            {
+                p[j/2] = 1.0;
+            }
+            for(int i = 0; i < nBins_; ++i)
+            {
+                g()[i][j] = p[i];
+                if(j-i-1 >= 0)
+                {
+                    g()[i][j] += p[j-i-1];
+                }
             }
         }
     }
     else
     {
-        for(int i = 0; i < nBins_; ++i)
-        {
-            for(int j = 0; j < nBins_; ++j)
-            {
-                for(int k = 0; k < nBins_; ++k)
-                {
-                    creation[i] += 0.5 * chi_[j][k][i] * aggKernel_()[j][k] *
-                                    y[j] * y[k];
-                }
-            }
-            for(int j = 0; j < nBins_; ++j)
-            {
-                destruction[i] += aggKernel_()[i][j] * y[i] * y[j];
-            }
-        }
-    }
-
-    return eta_ * ( creation - destruction);
-
-}
-
-void Foam::aggBreakup::updateAggKernel(const label& celli)
-{
-    // clear aggKernel
-    for(int i = 0; i < nBins_; ++i)
-    {
         for(int j = 0; j < nBins_; ++j)
         {
-            aggKernel_()[i][j] = 0.0;
-        }
-    }
-
-    if(isShearAggOn_)
-    {
-        scalar Gi(GA_()[celli]);
-
-        // alpha = 1.3333 ~ 1.3963, very small variation depending on the eigenvalues of the strain
-        // rate tensor E.
-        //                   eigVal(E) = (k * E_max, (1 - k) * E_max, -E_max)
-        // alpha = 1.33... in simple shear, which is the experimental condition.
-        scalar alpha(1.33333);
-
-        for(int i = 0; i < nBins_; ++i)
-        {
-           for(int j = 0; j < nBins_; ++j)
-           {
-               aggKernel_()[i][j] += alpha * Gi * shearAggKernel_()[i][j];
-           }
-        }
-    }
-    if(isBrowninanAggOn_)
-    {
-        // NOTICE: review this!
-        // I should rather define diffusivity elsewhere, so it would
-        // be easier to add diffusivity generated by RBC collision.
-
-        //Boltzmann constant [J K−1]
-        scalar kB(1.3806488E-23);
-
-        for(int i = 0; i < nBins_; ++i)
-        {
-            for(int j = 0; j < nBins_; ++j)
+            for(int i = 0; i < nBins_; ++i)
             {
-                const scalar& mu = mu_[celli];
-                if (mu <= 0.0)
+                if(i == j - 1)
                 {
-                    FatalError
-                           << "Nonpositive dynamic viscosity in cell "
-                           << celli << nl << exit(FatalError);
+                    g()[i][j] = 2.0;
                 }
-                aggKernel_()[i][j] += 2./3. * kB * T_.value()
-                        / mu_[celli] * brownianAggKernel_()[i][j];
+                else
+                {
+                    g()[i][j] = 0.0;
+                }
             }
         }
     }
-}
 
-void Foam::aggBreakup::updateBreKernel(const label& celli)
-{
-    // clear breKernel
-    for(int i = 0; i < nBins_; ++i)
+    if(debug)
     {
-        breKernel_()[i] =  0.0;
-    }
-
-    if(isBreakupOn_)
-    {
-        for(int i = 1; i < nBins_; ++i) // begins at i=0 because monomer does not break
+        // write the fragment mass distribution matrix in a file
+        // named "fragMassDistr"
+        OFstream ofFragMassDistr("fragMassDistr");
+        for(int i = 0; i < nBins_; i++)
         {
-            scalar Gi(GA_()[celli]);
-
-            breKernel_()[i] = pow(Gi / Gstar_.value(), b_) * Rc_()[i];
+            for(int j = 0; j < nBins_; j++)
+            {
+                ofFragMassDistr << g()[i][j]
+                                << tab;
+            }
+            ofFragMassDistr << nl;
         }
+        ofFragMassDistr << endl;
     }
-}
 
+    return g;
+}
 // * * * * * * * * * * * * * * * * Constructors  * * * * * * * * * * * * * * //
 
 
 Foam::aggBreakup::aggBreakup
 (
         const volVectorField& U,
-        const surfaceScalarField& phi,
-        const volScalarField& mu
+        const surfaceScalarField& phi
 )
 :
     ODESystem(),
+    IOdictionary
+    (
+        IOobject
+        (
+            "aggBreakupProperties",
+            U.time().constant(),
+            U.db(),
+            IOobject::MUST_READ,
+            IOobject::NO_WRITE
+        )
+    ),
     U_(U),
     phi_(phi),
-    mu_(mu),
     mesh_(U_.mesh()),
     runTime_(U_.time()),
-    Rmono_(dimensionedScalar("Rmono", dimLength, 0.0)),
+    nBins_(readLabel(lookup("nBins"))),
+    Rp_(dimensionedScalar("Rp", dimLength, 0.0)),
     T_(dimensionedScalar("T", dimTemperature, 300.0)),
+    mu_(dimensionedScalar("mu", dimMass/dimLength/dimTime, 3.5e-03)),
     a_(dimensionedScalar("a", dimless/dimTime, 1.0)),
     Gstar_(dimensionedScalar("Gstar", dimless/dimTime, 1000.0))
 {
-    readDict("aggBreakupProperties");
+    readDict();
     setCMD();
     setPBE();
 
@@ -276,7 +510,7 @@ Foam::aggBreakup::aggBreakup
     (
         new aggBrePostprocess
         (
-            aggBreakupDict_,
+            this,
             CMD_,
             vList_,
             Rlist_
@@ -304,9 +538,9 @@ Foam::aggBreakup::aggBreakup
 
 Foam::aggBreakup::~aggBreakup()
 {
-    // De-Allocate memory to prevent memory leak
+    // Deallocate memory to prevent memory leak
 
-    // Calculate the interpolation operator on the non-uniform grid
+    // Deallocate the interpolation operator on the non-uniform grid
     if(!isGridUniform_)
     {
         Info << "Deallocating the interpolation array" << nl << endl;
@@ -327,48 +561,43 @@ Foam::aggBreakup::~aggBreakup()
 // * * * * * * * * * * * * * * Member Functions  * * * * * * * * * * * * * * //
 
 
-void Foam::aggBreakup::readDict(string dictName)
+void Foam::aggBreakup::readDict()
 {
-    Info << "Reading " << dictName << nl << endl;
+    Info << "Reading " << this->dictName() << nl << endl;
 
-    aggBreakupDict_.set
-    (
-        new IOdictionary
+    isPBEcoupled_ = readBool(lookup("isPBEcoupled"));
+
+    if(!isPBEcoupled_)
+    {
+        // Create the selected ODE system solver
+        solver_ =  ODESolver::New
         (
-            IOobject
-            (
-                dictName,
-                runTime_.constant(),
-                runTime_.time(),
-                IOobject::MUST_READ,
-                IOobject::NO_WRITE
-            )
-        )
-    );
+            *this,
+            subDict("odeSolver")
+        );
+    }
 
-    isPBEcoupled_ = readBool(aggBreakupDict_->lookup("isPBEcoupled"));
+    isGridUniform_ = readBool(lookup("isGridUniform"));
 
-    isGridUniform_ = readBool(aggBreakupDict_->lookup("isGridUniform"));
-    nBins_ = readLabel( aggBreakupDict_->lookup("nBins") );
-    Rmono_ = aggBreakupDict_->lookup("Rmono");
-    DF_ = readScalar(aggBreakupDict_->lookup("DF"));
+    Rp_ = lookup("Rp");
+    DF_ = readScalar(lookup("DF"));
 
-    isBrowninanAggOn_ = readBool(aggBreakupDict_->lookup("isBrowninanAggOn"));
-    isShearAggOn_ = readBool(aggBreakupDict_->lookup("isShearAggOn"));
-    eta_ = readScalar( aggBreakupDict_->lookup("eta") );
-    T_ = aggBreakupDict_->lookup("T");
+    isBrowninanAggOn_ = readBool(lookup("isBrowninanAggOn"));
+    isShearAggOn_ = readBool(lookup("isShearAggOn"));
+    isSorensenianAggOn_ = readBool(lookup("isSorensenianAggOn"));
+    eta_ = readScalar( lookup("eta") );
+    T_ = lookup("T");
+    mu_ = lookup("muPlasma");
 
-    isBreakupOn_ = readBool(aggBreakupDict_->lookup("isBreakupOn"));
-//    a_ = aggBreakupDict_->lookup("a");
-    Gstar_ = aggBreakupDict_->lookup("Gstar");
-    b_ = readScalar(aggBreakupDict_->lookup("b"));
-    c_ = readScalar(aggBreakupDict_->lookup("c"));
+    isBreakupOn_ = readBool(lookup("isBreakupOn"));
+//    a_ = lookup("a");
+    Gstar_ = lookup("Gstar");
+    b_ = readScalar(lookup("b"));
+    c_ = readScalar(lookup("c"));
 
-    // Create the selected ODE system solver
-    solver_ =  ODESolver::New(
-                                *this,
-                                aggBreakupDict_->subDict("odeSolver")
-                              );
+    isActivationOn_ = readBool(lookup("isActivationOn"));
+    activThreshold_ = readScalar(lookup("activThreshold"));
+
 }
 
 
@@ -379,6 +608,7 @@ void Foam::aggBreakup::setCMD()
     vList_.setSize(nBins_);
     Rlist_.setSize(nBins_);
     CMD_.setSize(nBins_);
+    Dlist_.setSize(nBins_);
     if(isPBEcoupled_)
     {
         CMDold_.setSize(nBins_);
@@ -386,43 +616,41 @@ void Foam::aggBreakup::setCMD()
 
     forAll(vList_, i)
     {
+        // Number of monomers per cluster of class i
         if (isGridUniform_)
         {
             // Linear bin grid
             vList_.set(i, new scalar(i + 1));
-
-            // Cluster radius of gyration in bin i
-            Rlist_.set
-            (
-                i,
-                new dimensionedScalar(pow(vList_[i], 1.0/DF_) * Rmono_)
-            );
         }
         else
         {
             // Geometric bin grid
-            vList_.set
-            (
-                i,
-                new scalar(pow(2.0, i))
-            );
-
-            // Cluster radius of gyration in bin i
-            Rlist_.set
-            (
-                i,
-                new dimensionedScalar(pow(vList_[i], 1.0/DF_) * Rmono_)
-            );
+            vList_.set(i,  new scalar(pow(2.0, i)));
         }
 
-        // Rename radii of gyration acording to number of monomers
-        // in the cluster
-        Rlist_[i].name() = "R_" + to_string(vList_[i]);
-    }
-
-    forAll(vList_, i)
-    {
         const word name = to_string(vList_[i]);
+
+        // Cluster radius of gyration in class of cluster i
+        Rlist_.set
+        (
+            i,
+            new dimensionedScalar
+            (
+                "R_" + to_string(vList_[i]),
+                radiusOfGyration(vList_[i], DF_, Rp_)
+            )
+        );
+
+        // Brownian diffusivity in class of cluster i
+        Dlist_.set
+        (
+            i,
+            new dimensionedScalar
+            (
+                "D_" + to_string(vList_[i]),
+                einsteinStokes(Rlist_[i], T_, mu_)
+            )
+        );
 
         IOobject header
         (
@@ -433,7 +661,7 @@ void Foam::aggBreakup::setCMD()
             IOobject::NO_WRITE
         );
 
-        // check if dictionary exists and can be read
+        // Check if dictionary exists and can be read
         if (header.headerOk())
         {
             Info << "Reading field " << "C_" + name << nl << endl;
@@ -514,161 +742,93 @@ void Foam::aggBreakup::setCMD()
             );
         }
     }
+
+    if(isActivationOn_)
+    {
+        Info << "Reading field " << "C_RP"<< nl << endl;
+
+        Crp_.set
+        (
+            new volScalarField
+            (
+                IOobject
+                (
+                    "C_RP",
+                    runTime_.timeName(),
+                    mesh_,
+                    IOobject::MUST_READ,
+                    IOobject::AUTO_WRITE
+                ),
+                mesh_
+            )
+        );
+
+        vWF_.set
+        (
+            new volScalarField
+            (
+                IOobject
+                (
+                    "vWF",
+                    runTime_.timeName(),
+                    mesh_,
+                    IOobject::MUST_READ,
+                    IOobject::AUTO_WRITE
+                ),
+                mesh_,
+                dimensionedScalar("vWF", dimless/dimTime, 0.0)
+            )
+        );
+    }
 }
 
 void Foam::aggBreakup::setPBE()
 {
     Info << "Setting the PBE up..." << nl << endl;
 
+    // According to Pedocchi & Piedra-Cueva (2005) the aggregation kernel in general flow
+    // depends on the absolute velocity gradient, as had been previously formulated by
+    // Camp & Stein (1943).
+    G_.set
+    (
+        new volScalarField
+        (
+            IOobject
+            (
+                "G",
+                runTime_.timeName(),
+                mesh_,
+                IOobject::NO_READ,
+                IOobject::AUTO_WRITE
+            ),
+            sqrt(2.0) * mag(symm(fvc::grad(U_)()))
+        )
+    );
+
+    Info << "Writing field " << G_->name() << nl << endl;
+    G_->write();
+
     // Calculate the interpolation operator on the non-uniform grid
     if(!isGridUniform_)
     {
-        Info << "Allocating the interpolation (chi) array" << nl << endl;
-
-        chi_ = new scalar**[nBins_];
-        for(int i = 0; i < nBins_; ++i)
-        {
-            chi_[i] = new scalar*[nBins_];
-            for(int j = 0; j < nBins_; ++j)
-            {
-                //allocates and initializes = 0
-                chi_[i][j] = new scalar[nBins_]();
-            }
-        }
-
-        scalar vSum[nBins_][nBins_];
-        forAll(vList_, i)
-        {
-            forAll(vList_, j)
-            {
-                vSum[i][j] = vList_[i] + vList_[j];
-            }
-        }
-
-        //NEEDS DEBUG!!! No aggregation into the last bin...
-        for(int k = 0; k < nBins_ - 1; ++k)
-        {
-            for(int i = 0; i < nBins_; ++i)
-            {
-                for(int j = 0; j < nBins_; ++j)
-                {
-                    if
-                    (
-                        (vSum[i][j] <= vList_[k+1]) &&
-                        (vSum[i][j] >= vList_[k])
-                    )
-                    {
-                        chi_[i][j][k] = (vList_[k+1] - vSum[i][j])
-                                        / (vList_[k+1] - vList_[k]);
-                    }
-                    if
-                    (
-                        (vSum[i][j] <= vList_[k]) &&
-                        (vSum[i][j] >= vList_[k-1])
-                    )
-                    {
-                        chi_[i][j][k] = (vSum[i][j] - vList_[k-1])
-                                        / (vList_[k] - vList_[k-1]);
-                    }
-                }
-            }
-
-        }
+        allocChi();
     }
 
     // Generate the kernel matrices:
     if(isBrowninanAggOn_ || isShearAggOn_ )
     {
-        Info << "Allocating the aggregation kernel array" << nl << endl;
-        aggKernel_.set(new scalarSquareMatrix(nBins_));
+        Info << "Allocating the collision kernel array" << nl << endl;
+        kc_.set(new scalarSquareMatrix(nBins_));
 
-        if(isBrowninanAggOn_)
+        if(isBrowninanAggOn_ || isSorensenianAggOn_)
         {
-            // allocating brownian aggregation kernel
-            brownianAggKernel_.set(new scalarSquareMatrix(nBins_));
-
-            // filling the 2nd order array
-            for(int i = 0; i < nBins_; ++i)
-            {
-                for(int j = 0; j < nBins_; ++j)
-                {
-                    brownianAggKernel_()[i][j] = pow(Rlist_[i].value()
-                                                     + Rlist_[j].value(),
-                                                     2.0)
-                                                 / (Rlist_[i].value()
-                                                    * Rlist_[j].value());
-                }
-            }
-
-            if(debug)
-            {
-                //output file
-                OFstream ofBrownKernel("kd");
-                for(int i = 0; i < nBins_; ++i)
-                {
-                    for(int j = 0; j < nBins_; ++j)
-                    {
-                        ofBrownKernel << brownianAggKernel_()[i][j]
-                                      << tab;
-                    }
-                    ofBrownKernel << nl;
-                }
-                ofBrownKernel << endl;
-            }
+            // allocating brownian collision kernel
+            kdBase_ = Brownian_kernel();
         }
-
         if(isShearAggOn_)
         {
-            // allocating array
-            shearAggKernel_.set(new scalarSquareMatrix(nBins_));
-
-            // filling array
-            for(int i = 0; i < nBins_; ++i)
-            {
-                for(int j = 0; j < nBins_; ++j)
-                {
-                    shearAggKernel_()[i][j] = pow(Rlist_[i].value()
-                                                  + Rlist_[j].value(),
-                                                  3.0);
-                }
-            }
-
-            if(debug)
-            {
-                //output file
-                OFstream ofShearKernel("kf");
-                for(int i = 0; i < nBins_; ++i)
-                {
-                    for(int j = 0; j < nBins_; ++j)
-                    {
-                        ofShearKernel << shearAggKernel_()[i][j]
-                                      << tab;
-                    }
-                    ofShearKernel << nl;
-                }
-            }
-
-            // According to Pedocchi & Piedra-Cueva (2005) the aggregation kernel in general flow
-            // depends on the absolute velocity gradient, as had been previously formulated by
-            // Camp & Stein (1943).
-            GA_.set
-            (
-                new volScalarField
-                (
-                    IOobject
-                    (
-                        "G_A",
-                        runTime_.timeName(),
-                        mesh_,
-                        IOobject::NO_READ,
-                        IOobject::AUTO_WRITE
-                    ),
-                    sqrt(2.0) * mag(symm(fvc::grad(U_)()))
-                )
-            );
-
-            Info << "Writing field G_A" << nl << endl;
-            GA_->write();
+            // allocating shear collision kernel (excluding shear)
+            ksBase_ = shear_kernelBase();
         }
     }
     else
@@ -680,96 +840,13 @@ void Foam::aggBreakup::setPBE()
 
     if(isBreakupOn_)
     {
-        breKernel_.set(new scalarField(nBins_, 0.0));
-        Rc_.set(new scalarField(nBins_, 0.0));
+        Info << "Allocating the breakup kernel array" << nl << endl;
+        kb_.set(new scalarField(nBins_, 0.0));
 
-        // fill the radii part of the breakup kernel. The shear part depends
-        // on the cell shear rate, therefore the breKernel is calculated
-        // elsewhere.
-        for(int i = 0; i < nBins_; ++i)
-        {
-            Rc_()[i] = pow(Rlist_[i].value() / Rlist_[0].value(), c_);
-        }
+        kbBase_ = breakup_kernelBase();
 
-        if(debug)
-        {
-            Info << "Writing (R_i/R_p)^c in file \"kb\"" << nl << endl;
-            //output file
-            OFstream ofBreakupKernelDebug("kb");
-            for(int i = 0; i < nBins_; ++i)
-            {
-                ofBreakupKernelDebug << Rc_()[i]
-                                     << tab;
-            }
-            ofBreakupKernelDebug << endl;
-        }
+        fragMassDistr_ = fragMassDistr();
 
-        if(a_.value() != 1.0)
-        {
-            Info << "In the dictionary " << aggBreakupDict_->name()
-                 << " the breakup constant \'a != 1 s^-1\' was given."
-                 << " Calculating new Gstar from a, b, c, and R_1." << endl;
-            Gstar_.value() = pow(a_.value() * pow(Rlist_[0].value(), c_),
-                                 - 1.0  / b_);
-        }
-
-        // Set binary fragment mass distribution
-        // You can implement other fragment mass distributions if you like
-        // (e.g., normal, erosion, uniform...)
-        fragMassDistr_.set(new scalarSquareMatrix(nBins_));
-
-        if(isGridUniform_)
-        {
-            for(int j = 0; j < nBins_; ++j)
-            {
-                scalarField p(nBins_, 0.0);
-                for(int i = 0; i < (j + 1) / 2; ++i)
-                {
-                    p[j/2] = 1.0;
-                }
-                for(int i = 0; i < nBins_; ++i)
-                {
-                    fragMassDistr_()[i][j] = p[i];
-                    if(j-i-1 >= 0)
-                    {
-                        fragMassDistr_()[i][j] += p[j-i-1];
-                    }
-                }
-            }
-        }
-        else
-        {
-            for(int j = 0; j < nBins_; ++j)
-            {
-                for(int i = 0; i < nBins_; ++i)
-                {
-                    if(i == j - 1)
-                    {
-                        fragMassDistr_()[i][j] = 2.0;
-                    }
-                    else
-                    {
-                        fragMassDistr_()[i][j] = 0.0;
-                    }
-                }
-            }
-        }
-
-        if(debug)
-        {
-            // write the fragment mass distribution matrix in a file named "g"
-            OFstream ofFragMassDistr("g");
-            for(int i = 0; i < nBins_; i++)
-            {
-                for(int j = 0; j < nBins_; j++)
-                {
-                    ofFragMassDistr << fragMassDistr_()[i][j]
-                                    << tab;
-                }
-                ofFragMassDistr << nl;
-            }
-            ofFragMassDistr << endl;
-        }
     }
     else
     {
@@ -781,20 +858,172 @@ void Foam::aggBreakup::setPBE()
 
 void Foam::aggBreakup::update()
 {
+    if(isShearAggOn_)
+    {
+        // update the absolute velocity gradient field
+        G_() = sqrt(2.0) * mag(symm( fvc::grad(U_)() ));
+    }
+
+    if(isActivationOn_)
+    {
+        //solve transport of resting platelets
+        if(isSorensenianAggOn_)
+        {
+            //activate platelets
+            forAll(G_->internalField(),i)
+            {
+                if(G_->internalField()[i] >= activThreshold_)
+                {
+                    // C_RP -> C_1
+//                    CMD_[0].internalField()[i] += max(Crp_->internalField()[i], 0.0);
+//                    // C_RP = 0
+//                    Crp_->internalField()[i] = 0.0;
+                    vWF_->internalField()[i] = 2e4;
+                }
+            }
+
+            volScalarField D
+            (
+                IOobject
+                (
+                    "D",
+                    runTime_.timeName(),
+                    mesh_
+                ),
+                mesh_,
+                Dlist_[0]
+            );
+            D.internalField() += 1.05 * D.internalField() * G_->internalField();
+            fvScalarMatrix massTransport
+            (
+                fvm::ddt(Crp_())
+              + fvm::div(phi_, Crp_(), "div(phi,C_*)")
+              - fvm::laplacian
+                (
+                    D,
+                    Crp_(),
+                    "laplacian(D,C_*)"
+                )
+              ==
+              - fvc::Sp(vWF_(),Crp_())
+            );
+            massTransport.relax();
+            massTransport.solve(mesh_.solver("C_*"));
+        }
+        else
+        {
+            fvScalarMatrix massTransport
+            (
+                fvm::ddt(Crp_())
+              + fvm::div(phi_, Crp_(), "div(phi,C_*)")
+              - fvm::laplacian(Dlist_[0], Crp_(), "laplacian(D,C_*)")
+            );
+            massTransport.relax();
+            massTransport.solve(mesh_.solver("C_*"));
+        }
+    }
+
     if(isPBEcoupled_)
     {
-        solveTransport();
+        forAll(CMD_, i)
+        {
+            // CMDold stores CMD that is used in the source term S().
+            // Otherwise the source for one cluster would be computed
+            // with values partially of step t, and partially of t+dt.
+            CMDold_[i] = CMD_[i];
+        }
+
+        forAll(CMD_, i)
+        {
+            volScalarField& Ci = CMD_[i];
+            dimensionedScalar& Di = Dlist_[i];
+            fvScalarMatrix massTransport
+            (
+                fvm::ddt(Ci)
+              + fvm::div(phi_, Ci, "div(phi,C_*)")
+              - fvm::laplacian(Di, Ci, "laplacian(D,C_*)")
+              ==
+                S(i)
+            );
+            massTransport.relax();
+            massTransport.solve(mesh_.solver("C_*"));
+        }
     }
     else
     {
-        solveTransport();
+        //solve transport
+        forAll(CMD_, i)
+        {
+            volScalarField& Ci = CMD_[i];
+            dimensionedScalar& Di = Dlist_[i];
+
+            //solve transport of resting platelets
+            if(isSorensenianAggOn_)
+            {
+                volScalarField D
+                (
+                    IOobject
+                    (
+                        "D",
+                        runTime_.timeName(),
+                        mesh_
+                    ),
+                    mesh_,
+                    Di
+                );
+                D.internalField() += 1.05 * D.internalField() * G_->internalField();
+                if(i==0)
+                {
+                    fvScalarMatrix massTransport
+                    (
+                        fvm::ddt(Ci)
+                      + fvm::div(phi_, Ci, "div(phi,C_*)")
+                      - fvm::laplacian(D, Ci, "laplacian(D,C_*)")
+                    ==
+                        fvc::Sp(vWF_(),Crp_().oldTime())
+                    );
+                    massTransport.relax();
+                    massTransport.solve(mesh_.solver("C_*"));
+
+                }
+                else
+                {
+                    fvScalarMatrix massTransport
+                    (
+                        fvm::ddt(Ci)
+                      + fvm::div(phi_, Ci, "div(phi,C_*)")
+                      - fvm::laplacian(D, Ci, "laplacian(D,C_*)")
+                    );
+                    massTransport.relax();
+                    massTransport.solve(mesh_.solver("C_*"));
+                }
+
+            }
+            else
+            {
+                fvScalarMatrix massTransport
+                (
+                    fvm::ddt(Ci)
+                  + fvm::div(phi_, Ci, "div(phi,C_*)")
+                  - fvm::laplacian(Di, Ci, "laplacian(D,C_*)")
+                );
+                massTransport.relax();
+                massTransport.solve(mesh_.solver("C_*"));
+            }
+
+        }
+
         solveAggBreakup();
     }
 
-    if(isShearAggOn_)
+    //Eliminate spurious negative values.
+    forAll(CMD_, i)
     {
-        // update root-mean-square velocity gradient field
-        GA_() = sqrt(2.0) * mag(symm( fvc::grad(U_)() ));
+        CMD_[i] = max
+                  (
+                    CMD_[i],
+                    dimensionedScalar("zero", dimMoles/dimVol, 0.0)
+                  );
     }
 
     postProc->update();
@@ -802,10 +1031,10 @@ void Foam::aggBreakup::update()
 
 void Foam::aggBreakup::solveAggBreakup()
 {
-    scalar eps = readScalar
-                (
-                    aggBreakupDict_->subDict("odeSolver").lookup("eps")
-                );
+    scalar subDeltaT = readScalar
+    (
+        subDict("odeSolver").lookup("subDeltaT")
+    );
 
     Info << "Solving PBE" << tab
          << "T = " << runTime_.value() << " s"
@@ -821,22 +1050,14 @@ void Foam::aggBreakup::solveAggBreakup()
             y[dofi] = CMD_[dofi][celli];
         }
 
-        if(isBrowninanAggOn_ || isShearAggOn_)
-        {
-            updateAggKernel(celli);
-        }
-
-        if(isBreakupOn_)
-        {
-            updateBreKernel(celli);
-        }
+        updateKernelsInCell(celli);
 
         solver_->solve
         (
-            runTime_.value(),
-            runTime_.value() + runTime_.deltaT().value(),
+            0.0,
+            runTime_.deltaT().value(),
             y,
-            eps
+            subDeltaT
         );
 
         // update CMD in celli
@@ -847,54 +1068,6 @@ void Foam::aggBreakup::solveAggBreakup()
     }
 }
 
-
-void Foam::aggBreakup::solveTransport()
-{
-    if(isPBEcoupled_)
-    {
-        forAll(CMD_, i)
-        {
-            // CMDold stores CMD that is used in the source term S(). Otherwise the source for one
-            // cluster would be computed with values partially of step t, and partially of t+dt.
-            CMDold_[i] = CMD_[i];
-        }
-
-        forAll(CMD_, i)
-        {
-//            S(i)().write();
-
-            volScalarField& Ci = CMD_[i];
-
-            fvScalarMatrix massTransport
-            (
-                fvm::ddt(Ci)
-              + fvm::div(phi_, Ci, "div(phi,C_*)")
-//              - fvm::laplacian(D, Ci, "laplacian(D,C_*)")
-              ==
-                S(i)
-            );
-
-            massTransport.relax();
-            massTransport.solve(mesh_.solver("C_*"));
-        }
-    }
-    else
-    {
-        forAll(CMD_, i)
-        {
-            volScalarField& Ci = CMD_[i];
-
-            fvScalarMatrix massTransport
-            (
-                fvm::ddt(Ci)
-              + fvm::div(phi_, Ci, "div(phi,C_*)")
-        //              - fvm::laplacian(D, Ci, "laplacian(D,C_*)")
-            );
-
-            massTransport.solve(mesh_.solver("C_*"));
-        }
-    }
-}
 
 //-This is the actual PBE
 Foam::tmp<volScalarField> Foam::aggBreakup::S(label clusterI) const
@@ -1052,21 +1225,15 @@ Foam::tmp<volScalarField> Foam::aggBreakup::kag(label i, label j) const
 
     if(isBrowninanAggOn_)
     {
-        //Boltzmann constant [J K−1] = []
-        scalar kB(1.3806488E-23);
-
-        k->internalField() += 2./3. * kB * T_.value()
-                             / mu_.internalField() * brownianAggKernel_()[i][j];
+        k->internalField() += kdBase_()[i][j];
+        if(isSorensenianAggOn_)
+        {
+            k->internalField() += 1.05 * G_() * kdBase_()[i][j];
+        }
     }
     if(isShearAggOn_)
     {
-        // alpha = 1.3333 ~ 1.3963, very small variation depending on the eigenvalues of the strain
-        // rate tensor E.
-        //                   eigVal(E) = (k * E_max, (1 - k) * E_max, -E_max)
-        // alpha = 1.33... in simple shear, which is the experimental condition.
-        scalar alpha(1.33333);
-
-        k->internalField() += alpha * GA_() * shearAggKernel_()[i][j];
+        k->internalField() += G_() * ksBase_()[i][j];
     }
 
     return k;
@@ -1076,6 +1243,8 @@ Foam::tmp<volScalarField> Foam::aggBreakup::kbr(label i) const
 {
     dimensionedScalar alin("a\'", dimless/dimTime, 1.0);
 
+    // workaround: pow(alin, -b_), because dimensioned pow(G*, b_) is in kbBase_,
+    // which is dimensionless.
     tmp<volScalarField> k
     (
         new volScalarField
@@ -1086,7 +1255,7 @@ Foam::tmp<volScalarField> Foam::aggBreakup::kbr(label i) const
                 runTime_.timeName(),
                 mesh_
             ),
-            alin * pow(GA_() / Gstar_, b_) * Rc_()[i]
+            alin * pow(alin, -b_) * pow(G_(), b_) * kbBase_()[i]
         )
     );
 
@@ -1119,7 +1288,7 @@ Foam::Ostream& Foam::operator<<(Ostream& os, const aggBreakup& sds)
     os.writeKeyword("nBins") << sds.nBins_
                              << token::END_STATEMENT
                              << endl;
-    os.writeKeyword("Rmono") << sds.Rmono_
+    os.writeKeyword("Rp") << sds.Rp_
                              << token::END_STATEMENT
                              << endl;
     os.writeKeyword("DF") << sds.DF_
@@ -1152,6 +1321,14 @@ Foam::Ostream& Foam::operator<<(Ostream& os, const aggBreakup& sds)
     {
         os << sds.vList_[i] << tab
            << sds.Rlist_[i] << endl;
+    }
+
+    os << "v" << tab
+       << "D" << endl;
+    forAll(sds.vList_,i)
+    {
+        os << sds.vList_[i] << tab
+           << sds.Dlist_[i] << endl;
     }
 
     return os;
