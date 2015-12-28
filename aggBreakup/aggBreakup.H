@@ -134,7 +134,7 @@ class aggBreakup
                 dimensionedScalar T_;
 
                 //-Plasma viscosity
-                dimensionedScalar muPlasma_;
+                dimensionedScalar mu_;
 
                 //-Diffusivity
                 PtrList<dimensionedScalar> Dlist_;

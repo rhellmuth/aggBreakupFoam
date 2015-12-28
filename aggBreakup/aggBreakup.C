@@ -498,7 +498,7 @@ Foam::aggBreakup::aggBreakup
     nBins_(readLabel(lookup("nBins"))),
     Rp_(dimensionedScalar("Rp", dimLength, 0.0)),
     T_(dimensionedScalar("T", dimTemperature, 300.0)),
-    muPlasma_(dimensionedScalar("mu", dimMass/dimLength/dimTime, 3.5e-03)),
+    mu_(dimensionedScalar("mu", dimMass/dimLength/dimTime, 3.5e-03)),
     a_(dimensionedScalar("a", dimless/dimTime, 1.0)),
     Gstar_(dimensionedScalar("Gstar", dimless/dimTime, 1000.0))
 {
@@ -587,7 +587,7 @@ void Foam::aggBreakup::readDict()
     isSorensenianAggOn_ = readBool(lookup("isSorensenianAggOn"));
     eta_ = readScalar( lookup("eta") );
     T_ = lookup("T");
-    muPlasma_ = lookup("muPlasma");
+    mu_ = lookup("muPlasma");
 
     isBreakupOn_ = readBool(lookup("isBreakupOn"));
 //    a_ = lookup("a");
@@ -648,7 +648,7 @@ void Foam::aggBreakup::setCMD()
             new dimensionedScalar
             (
                 "D_" + to_string(vList_[i]),
-                einsteinStokes(Rlist_[i], T_, muPlasma_)
+                einsteinStokes(Rlist_[i], T_, mu_)
             )
         );
 
